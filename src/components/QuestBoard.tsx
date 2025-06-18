@@ -1,13 +1,15 @@
 
 import React, { useState } from 'react';
 import { useGame } from '../context/GameContext';
-import { Plus, Target, Zap, Flame, Crown, Settings, Lightbulb } from 'lucide-react';
+import { Plus, Target, Zap, Flame, Crown, Settings, Lightbulb, Sparkles } from 'lucide-react';
 import QuestSuggestions from './QuestSuggestions';
+import AIQuestGenerator from './AIQuestGenerator';
 
 const QuestBoard = () => {
   const { habits, completeHabit, character, addHabit } = useGame();
   const [showAddForm, setShowAddForm] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [showAIGenerator, setShowAIGenerator] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [newHabit, setNewHabit] = useState({
     title: '',
@@ -72,6 +74,13 @@ const QuestBoard = () => {
         </div>
         <div className="flex space-x-4">
           <button
+            onClick={() => setShowAIGenerator(true)}
+            className="flex items-center space-x-2 bg-gradient-to-r from-purple-600 to-pink-600 px-4 py-2 rounded-lg font-semibold hover:shadow-lg hover:shadow-purple-500/25 transition-all duration-300"
+          >
+            <Sparkles size={18} />
+            <span>AI Quests</span>
+          </button>
+          <button
             onClick={() => setShowSuggestions(true)}
             className="flex items-center space-x-2 bg-gradient-to-r from-cyan-600 to-blue-600 px-4 py-2 rounded-lg font-semibold hover:shadow-lg hover:shadow-cyan-500/25 transition-all duration-300"
           >
@@ -104,6 +113,11 @@ const QuestBoard = () => {
           </button>
         ))}
       </div>
+
+      {/* AI Quest Generator Modal */}
+      {showAIGenerator && (
+        <AIQuestGenerator onClose={() => setShowAIGenerator(false)} />
+      )}
 
       {/* Quest Suggestions Modal */}
       {showSuggestions && (
