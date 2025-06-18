@@ -5,7 +5,7 @@ import { Plus, Target, Zap, Flame, Crown, Settings, Lightbulb } from 'lucide-rea
 import QuestSuggestions from './QuestSuggestions';
 
 const QuestBoard = () => {
-  const { habits, completeHabit, character } = useGame();
+  const { habits, completeHabit, character, addHabit } = useGame();
   const [showAddForm, setShowAddForm] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -38,7 +38,7 @@ const QuestBoard = () => {
   const handleAddHabit = (e: React.FormEvent) => {
     e.preventDefault();
     if (newHabit.title.trim()) {
-      // addHabit(newHabit); - Will implement in next step
+      addHabit(newHabit);
       setNewHabit({ 
         title: '', 
         category: 'Personal', 
