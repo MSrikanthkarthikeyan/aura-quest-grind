@@ -24,41 +24,71 @@ const AIQuestGenerator = ({ onClose }: AIQuestGeneratorProps) => {
   });
 
   const handleGenerateQuests = async () => {
+    console.log('Generate AI Quests button clicked');
+    console.log('Quest params:', questParams);
+    
     if (questParams.goals.length === 0) {
       setError('Please add at least one goal');
+      console.log('Error: No goals provided');
       return;
     }
 
     setLoading(true);
     setError(null);
     setGeneratedQuests([]);
+    console.log('Starting quest generation...');
 
     try {
       const quests = await generateAIQuests(questParams);
+      console.log('Generated quests:', quests);
       setGeneratedQuests(quests);
       // Auto-select all generated quests
       setSelectedQuests(new Set(Array.from({ length: quests.length }, (_, i) => i)));
+      console.log('Quests generated successfully');
     } catch (err) {
+      console.error('Error generating quests:', err);
       setError(err instanceof Error ? err.message : 'Failed to generate quests');
     } finally {
       setLoading(false);
     }
   };
 
+  const mapFrequency = (frequency: string): 'daily' | 'weekly' | 'milestone' => {
+    const freq = frequency.toLowerCase();
+    if (freq === 'daily') return 'daily';
+    if (freq === 'weekly') return 'weekly';
+    return 'milestone'; // For 'once' or 'custom'
+  };
+
+  const mapDifficulty = (difficulty: string): 'basic' | 'intermediate' | 'elite' => {
+    const diff = difficulty.toLowerCase();
+    if (diff === 'easy') return 'basic';
+    if (diff === 'hard') return 'elite';
+    return 'intermediate'; // For 'moderate' or default
+  };
+
   const handleAddSelectedQuests = () => {
+    console.log('Adding selected quests:', selectedQuests);
+    console.log('Generated quests to add:', generatedQuests);
+    
     generatedQuests.forEach((quest, index) => {
       if (selectedQuests.has(index)) {
-        addHabit({
+        const habitData = {
           title: quest.title,
           category: quest.category,
           xpReward: quest.xpReward,
-          frequency: quest.frequency.toLowerCase() as 'daily' | 'weekly' | 'milestone',
-          difficulty: quest.difficulty.toLowerCase() as 'basic' | 'intermediate' | 'elite',
+          frequency: mapFrequency(quest.frequency),
+          difficulty: mapDifficulty(quest.difficulty),
           description: `${quest.duration} - ${quest.subtasks.join(' • ')}`,
           tier: quest.difficulty === 'Hard' ? 3 : quest.difficulty === 'Moderate' ? 2 : 1,
-        });
+        };
+        
+        console.log('Adding habit:', habitData);
+        addHabit(habitData);
       }
     });
+    
+    console.log('All selected quests added, closing modal');
     onClose();
   };
 
@@ -70,6 +100,7 @@ const AIQuestGenerator = ({ onClose }: AIQuestGeneratorProps) => {
       newSelected.add(index);
     }
     setSelectedQuests(newSelected);
+    console.log('Quest selection toggled:', index, 'New selection:', newSelected);
   };
 
   const addGoal = (goal: string) => {
@@ -78,6 +109,7 @@ const AIQuestGenerator = ({ onClose }: AIQuestGeneratorProps) => {
         ...prev,
         goals: [...prev.goals, goal.trim()]
       }));
+      console.log('Goal added:', goal.trim());
     }
   };
 
@@ -86,6 +118,7 @@ const AIQuestGenerator = ({ onClose }: AIQuestGeneratorProps) => {
       ...prev,
       goals: prev.goals.filter(goal => goal !== goalToRemove)
     }));
+    console.log('Goal removed:', goalToRemove);
   };
 
   const categoryColors = {
