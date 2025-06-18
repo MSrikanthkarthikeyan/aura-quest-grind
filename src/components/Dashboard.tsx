@@ -1,14 +1,27 @@
 
 import React from 'react';
 import { useGame } from '../context/GameContext';
-import { Zap, Target, Clock, TrendingUp } from 'lucide-react';
+import { Zap, Target, Clock, TrendingUp, Settings, Crown } from 'lucide-react';
 
 const Dashboard = () => {
-  const { character, habits } = useGame();
+  const { character, habits, userRoles } = useGame();
   
   const todayHabits = habits.filter(h => !h.completed);
   const completedToday = habits.filter(h => h.completed).length;
   const totalHabits = habits.length;
+  const maxStreak = Math.max(...habits.map(h => h.streak), 0);
+  const eliteQuests = habits.filter(h => h.difficulty === 'elite').length;
+
+  const getRoleDisplayName = (role: string) => {
+    const roleNames = {
+      'developer': 'Code Hunter',
+      'student': 'Knowledge Seeker',
+      'entrepreneur': 'Business Demon',
+      'influencer': 'Digital Sovereign',
+      'fitness': 'Physical Ascendant',
+    };
+    return roleNames[role as keyof typeof roleNames] || role;
+  };
 
   return (
     <div className="p-8 space-y-8">
@@ -18,6 +31,18 @@ const Dashboard = () => {
           Welcome Back, {character.name}
         </h1>
         <p className="text-gray-400 text-lg">Level {character.level} {character.class}</p>
+        {userRoles && (
+          <div className="flex justify-center space-x-2 mt-3">
+            {userRoles.roles.map(role => (
+              <span
+                key={role}
+                className="px-3 py-1 bg-gradient-to-r from-purple-600/20 to-cyan-600/20 border border-purple-500/30 rounded-full text-sm font-medium"
+              >
+                {getRoleDisplayName(role)}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Character Overview */}
@@ -47,7 +72,7 @@ const Dashboard = () => {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div className="bg-gradient-to-br from-green-900/40 to-emerald-900/40 rounded-xl p-6 border border-green-500/30">
           <div className="flex items-center justify-between">
             <div>
@@ -68,26 +93,39 @@ const Dashboard = () => {
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-cyan-900/40 to-blue-900/40 rounded-xl p-6 border border-cyan-500/30">
+        <div className="bg-gradient-to-br from-orange-900/40 to-red-900/40 rounded-xl p-6 border border-orange-500/30">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-cyan-400 text-sm font-medium">Focus Sessions</p>
-              <p className="text-3xl font-bold text-white">0</p>
+              <p className="text-orange-400 text-sm font-medium">Max Streak</p>
+              <p className="text-3xl font-bold text-white">{maxStreak}</p>
             </div>
-            <Clock className="text-cyan-400" size={32} />
+            <div className="text-orange-400 text-3xl">🔥</div>
+          </div>
+        </div>
+
+        <div className="bg-gradient-to-br from-yellow-900/40 to-amber-900/40 rounded-xl p-6 border border-yellow-500/30">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-yellow-400 text-sm font-medium">Elite Quests</p>
+              <p className="text-3xl font-bold text-white">{eliteQuests}</p>
+            </div>
+            <Crown className="text-yellow-400" size={32} />
           </div>
         </div>
       </div>
 
       {/* Today's Quests */}
       <div className="bg-gradient-to-br from-gray-900/80 to-gray-800/40 rounded-2xl p-6 border border-gray-700/50">
-        <h3 className="text-xl font-bold mb-4 text-white">Today's Quests</h3>
+        <h3 className="text-xl font-bold mb-4 text-white">Active Quests</h3>
         <div className="space-y-3">
           {todayHabits.slice(0, 5).map(habit => (
             <div key={habit.id} className="flex items-center justify-between p-4 bg-gray-800/50 rounded-lg border border-gray-700/50">
               <div>
-                <p className="font-medium text-white">{habit.title}</p>
-                <p className="text-sm text-gray-400">{habit.category} • {habit.xpReward} XP</p>
+                <div className="flex items-center space-x-2">
+                  <p className="font-medium text-white">{habit.title}</p>
+                  {habit.difficulty === 'elite' && <Crown size={16} className="text-yellow-400" />}
+                </div>
+                <p className="text-sm text-gray-400">{habit.category} • {habit.xpReward} XP • {habit.frequency}</p>
               </div>
               <div className="flex items-center space-x-2">
                 <span className="text-orange-400 text-sm">🔥 {habit.streak}</span>
