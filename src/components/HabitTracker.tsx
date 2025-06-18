@@ -10,6 +10,10 @@ const HabitTracker = () => {
     title: '',
     category: 'Personal',
     xpReward: 25,
+    frequency: 'daily' as 'daily' | 'weekly' | 'milestone',
+    difficulty: 'basic' as 'basic' | 'intermediate' | 'elite',
+    description: '',
+    tier: 1,
   });
 
   const categories = ['Academics', 'Tech', 'Business', 'Fitness', 'Personal'];
@@ -25,7 +29,15 @@ const HabitTracker = () => {
     e.preventDefault();
     if (newHabit.title.trim()) {
       addHabit(newHabit);
-      setNewHabit({ title: '', category: 'Personal', xpReward: 25 });
+      setNewHabit({ 
+        title: '', 
+        category: 'Personal', 
+        xpReward: 25,
+        frequency: 'daily' as 'daily' | 'weekly' | 'milestone',
+        difficulty: 'basic' as 'basic' | 'intermediate' | 'elite',
+        description: '',
+        tier: 1,
+      });
       setShowAddForm(false);
     }
   };
@@ -64,6 +76,16 @@ const HabitTracker = () => {
                 placeholder="Enter your quest..."
               />
             </div>
+            <div>
+              <label className="block text-sm font-medium mb-2">Description</label>
+              <textarea
+                value={newHabit.description}
+                onChange={(e) => setNewHabit({ ...newHabit, description: e.target.value })}
+                className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:border-purple-500 focus:outline-none"
+                placeholder="Describe your quest..."
+                rows={3}
+              />
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium mb-2">Category</label>
@@ -75,6 +97,32 @@ const HabitTracker = () => {
                   {categories.map(cat => (
                     <option key={cat} value={cat}>{cat}</option>
                   ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">Frequency</label>
+                <select
+                  value={newHabit.frequency}
+                  onChange={(e) => setNewHabit({ ...newHabit, frequency: e.target.value as 'daily' | 'weekly' | 'milestone' })}
+                  className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:border-purple-500 focus:outline-none"
+                >
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="milestone">Milestone</option>
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">Difficulty</label>
+                <select
+                  value={newHabit.difficulty}
+                  onChange={(e) => setNewHabit({ ...newHabit, difficulty: e.target.value as 'basic' | 'intermediate' | 'elite' })}
+                  className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:border-purple-500 focus:outline-none"
+                >
+                  <option value="basic">Basic</option>
+                  <option value="intermediate">Intermediate</option>
+                  <option value="elite">Elite</option>
                 </select>
               </div>
               <div>
