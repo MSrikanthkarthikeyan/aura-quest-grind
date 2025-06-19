@@ -18,7 +18,7 @@ export interface AIQuestResponse {
 }
 
 const GEMINI_API_KEY = 'AIzaSyCh_5H3df-gsWXiQWbD7aG5br6FD0jE1sI';
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent';
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
 
 export const generateAIQuests = async (request: AIQuestRequest): Promise<AIQuestResponse[]> => {
   console.log('Gemini API: Starting quest generation with request:', request);
