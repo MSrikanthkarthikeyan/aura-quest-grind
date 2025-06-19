@@ -16,7 +16,7 @@ const QuestBoard = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [showCalendar, setShowCalendar] = useState(false);
   
-  const newHabit = {
+  const [newHabit, setNewHabit] = useState({
     title: '',
     category: 'Personal',
     xpReward: 25,
@@ -24,7 +24,7 @@ const QuestBoard = () => {
     difficulty: 'basic' as const,
     description: '',
     tier: 1,
-  };
+  });
 
   const categories = ['all', 'Tech', 'Academics', 'Business', 'Content', 'Fitness', 'Personal'];
   const categoryColors = {
