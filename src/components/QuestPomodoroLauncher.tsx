@@ -21,6 +21,11 @@ const QuestPomodoroLauncher = ({ quest, onClose, onConfirm }: QuestPomodoroLaunc
   const navigate = useNavigate();
 
   const parseDuration = (duration: string): number => {
+    // Add null/undefined check and provide fallback
+    if (!duration || typeof duration !== 'string') {
+      return 30; // Default to 30 minutes if duration is invalid
+    }
+    
     const minuteMatch = duration.match(/(\d+)\s*(?:minutes?|mins?)/i);
     const hourMatch = duration.match(/(\d+)\s*(?:hours?|hrs?)/i);
     
@@ -53,7 +58,7 @@ const QuestPomodoroLauncher = ({ quest, onClose, onConfirm }: QuestPomodoroLaunc
         <div className="bg-gray-800/50 rounded-xl p-4 mb-6">
           <div className="flex items-center justify-between mb-3">
             <span className="text-gray-300">Estimated Duration:</span>
-            <span className="text-white font-semibold">{quest.duration}</span>
+            <span className="text-white font-semibold">{quest.duration || '30 minutes'}</span>
           </div>
           <div className="flex items-center justify-between mb-3">
             <span className="text-gray-300">Pomodoro Blocks:</span>
