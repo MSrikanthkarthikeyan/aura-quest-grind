@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { questTemplates, getQuestsForRoles, QuestTemplate } from '../utils/questTemplates';
+import { useAuth } from './AuthContext';
+import { firebaseDataService } from '../services/firebaseDataService';
 
 interface Character {
   name: string;
@@ -72,11 +74,14 @@ interface GameContextType {
   getDailyActivity: (date: string) => DailyActivity;
   getStreakCount: () => number;
   recordDailyLogin: () => void;
+  syncToFirebase: () => void;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
 
 export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user } = useAuth();
+  
   const [character, setCharacter] = useState<Character>(() => {
     const saved = localStorage.getItem('character');
     return saved ? JSON.parse(saved) : {
@@ -142,6 +147,73 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const saved = localStorage.getItem('dailyActivities');
     return saved ? JSON.parse(saved) : [];
   });
+
+  // Firebase sync effect
+  useEffect(() => {
+    if (user) {
+      // Load data from Firebase when user logs in
+      loadFromFirebase();
+      
+      // Set up real-time listener
+      const unsubscribe = firebaseDataService.subscribeToGameData(user.uid, (data) => {
+        if (data) {
+          if (data.character) setCharacter(data.character);
+          if (data.habits) setHabits(data.habits);
+          if (data.achievements) setAchievements(data.achievements);
+          if (data.userRoles) {
+            setUserRolesState(data.userRoles);
+            setHasCompletedOnboarding(true);
+          }
+          if (data.dailyActivities) setDailyActivities(data.dailyActivities);
+        }
+      });
+
+      return () => unsubscribe();
+    }
+  }, [user]);
+
+  const loadFromFirebase = async () => {
+    if (!user) return;
+    
+    try {
+      const data = await firebaseDataService.loadGameData(user.uid);
+      if (data) {
+        if (data.character) setCharacter(data.character);
+        if (data.habits) setHabits(data.habits);
+        if (data.achievements) setAchievements(data.achievements);
+        if (data.userRoles) {
+          setUserRolesState(data.userRoles);
+          setHasCompletedOnboarding(true);
+        }
+        if (data.dailyActivities) setDailyActivities(data.dailyActivities);
+      }
+    } catch (error) {
+      console.error('Error loading data from Firebase:', error);
+    }
+  };
+
+  const syncToFirebase = async () => {
+    if (!user) return;
+
+    try {
+      await firebaseDataService.saveGameData(user.uid, {
+        character,
+        habits,
+        achievements,
+        userRoles,
+        dailyActivities
+      });
+    } catch (error) {
+      console.error('Error syncing to Firebase:', error);
+    }
+  };
+
+  // Auto-sync when data changes
+  useEffect(() => {
+    if (user) {
+      syncToFirebase();
+    }
+  }, [character, habits, achievements, userRoles, dailyActivities, user]);
 
   // Save to localStorage whenever state changes
   useEffect(() => {
@@ -392,6 +464,15 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const startQuestSession = (questId: string, pomodoroCount: number) => {
     setCurrentQuestSession({ questId, pomodoroCount });
+    
+    // Save quest session to Firebase
+    if (user) {
+      firebaseDataService.saveQuestSession(user.uid, {
+        questId,
+        pomodoroCount,
+        startedAt: new Date().toISOString()
+      });
+    }
   };
 
   const completeQuestSession = () => {
@@ -448,6 +529,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       getDailyActivity,
       getStreakCount,
       recordDailyLogin,
+      syncToFirebase,
     }}>
       {children}
     </GameContext.Provider>

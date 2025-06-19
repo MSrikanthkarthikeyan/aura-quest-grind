@@ -1,6 +1,7 @@
-
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useGame } from '../context/GameContext';
+import { useAuth } from '../context/AuthContext';
+import { firebaseDataService } from '../services/firebaseDataService';
 
 interface CalendarHeatmapProps {
   onDateClick?: (date: string) => void;
@@ -8,6 +9,28 @@ interface CalendarHeatmapProps {
 
 const CalendarHeatmap = ({ onDateClick }: CalendarHeatmapProps) => {
   const { habits, getDailyActivity, getStreakCount } = useGame();
+  const { user } = useAuth();
+  const [firebaseActivities, setFirebaseActivities] = useState<any[]>([]);
+  
+  useEffect(() => {
+    if (user) {
+      loadFirebaseActivities();
+    }
+  }, [user]);
+
+  const loadFirebaseActivities = async () => {
+    if (!user) return;
+    
+    const endDate = new Date().toISOString().split('T')[0];
+    const startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    
+    try {
+      const activities = await firebaseDataService.getStreakData(user.uid, startDate, endDate);
+      setFirebaseActivities(activities);
+    } catch (error) {
+      console.error('Error loading Firebase activities:', error);
+    }
+  };
   
   // Generate last 30 days
   const generateDates = () => {
@@ -26,10 +49,14 @@ const CalendarHeatmap = ({ onDateClick }: CalendarHeatmapProps) => {
 
   const getActivityLevel = (date: string) => {
     const activity = getDailyActivity(date);
-    if (!activity.hasLogin) return 0;
-    if (activity.questsCompleted === 0) return 1;
-    if (activity.questsCompleted <= 2) return 2;
-    if (activity.questsCompleted <= 3) return 3;
+    const firebaseActivity = firebaseActivities.find(a => a.date === date);
+    
+    const totalQuests = activity.questsCompleted + (firebaseActivity?.questsCompleted || 0);
+    
+    if (!activity.hasLogin && !firebaseActivity?.hasLogin) return 0;
+    if (totalQuests === 0) return 1;
+    if (totalQuests <= 2) return 2;
+    if (totalQuests <= 3) return 3;
     return 4; // Epic day
   };
 
@@ -54,7 +81,7 @@ const CalendarHeatmap = ({ onDateClick }: CalendarHeatmapProps) => {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h3 className="text-xl font-bold text-white mb-1">Dungeon History</h3>
-          <p className="text-gray-400 text-sm">Your 30-day quest journey</p>
+          <p className="text-gray-400 text-sm">Your 30-day quest journey {user ? '(Synced)' : '(Local)'}</p>
         </div>
         <div className="text-right">
           <div className="text-2xl font-bold text-orange-400 flex items-center space-x-2">
@@ -69,13 +96,15 @@ const CalendarHeatmap = ({ onDateClick }: CalendarHeatmapProps) => {
         {dates.map(date => {
           const level = getActivityLevel(date);
           const activity = getDailyActivity(date);
+          const firebaseActivity = firebaseActivities.find(a => a.date === date);
+          const totalQuests = activity.questsCompleted + (firebaseActivity?.questsCompleted || 0);
           
           return (
             <div
               key={date}
               className={`aspect-square rounded border cursor-pointer transition-all duration-200 hover:scale-110 ${getActivityColor(level)}`}
               onClick={() => onDateClick?.(date)}
-              title={`${formatDate(date)}: ${activity.questsCompleted} quests${activity.hasLogin ? ', logged in' : ''}`}
+              title={`${formatDate(date)}: ${totalQuests} quests${activity.hasLogin || firebaseActivity?.hasLogin ? ', logged in' : ''}`}
             >
               {level === 4 && (
                 <div className="w-full h-full flex items-center justify-center text-xs">
