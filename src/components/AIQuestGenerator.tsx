@@ -23,32 +23,46 @@ const AIQuestGenerator = ({ onClose }: AIQuestGeneratorProps) => {
     fitnessTypes: userRoles?.fitnessTypes || [],
   });
 
-  const handleGenerateQuests = async () => {
-    console.log('Generate AI Quests button clicked');
+  const handleGenerateQuests = async (e?: React.MouseEvent) => {
+    console.log('=== AI QUEST BUTTON CLICKED ===');
+    console.log('Event:', e);
+    console.log('Button disabled?', loading || questParams.goals.length === 0);
+    console.log('Loading state:', loading);
+    console.log('Goals count:', questParams.goals.length);
     console.log('Quest params:', questParams);
     
+    // Prevent default if it's a form submission
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    
     if (questParams.goals.length === 0) {
+      console.log('ERROR: No goals provided');
       setError('Please add at least one goal');
-      console.log('Error: No goals provided');
       return;
     }
 
+    console.log('Starting quest generation process...');
     setLoading(true);
     setError(null);
     setGeneratedQuests([]);
-    console.log('Starting quest generation...');
 
     try {
+      console.log('Calling generateAIQuests with params:', questParams);
       const quests = await generateAIQuests(questParams);
-      console.log('Generated quests:', quests);
+      console.log('SUCCESS: Generated quests:', quests);
       setGeneratedQuests(quests);
       // Auto-select all generated quests
       setSelectedQuests(new Set(Array.from({ length: quests.length }, (_, i) => i)));
-      console.log('Quests generated successfully');
+      console.log('Quest generation completed successfully');
     } catch (err) {
-      console.error('Error generating quests:', err);
+      console.error('ERROR generating quests:', err);
+      console.error('Error type:', typeof err);
+      console.error('Error message:', err instanceof Error ? err.message : 'Unknown error');
       setError(err instanceof Error ? err.message : 'Failed to generate quests');
     } finally {
+      console.log('Setting loading to false');
       setLoading(false);
     }
   };
@@ -69,7 +83,6 @@ const AIQuestGenerator = ({ onClose }: AIQuestGeneratorProps) => {
 
   const handleAddSelectedQuests = () => {
     console.log('Adding selected quests:', selectedQuests);
-    console.log('Generated quests to add:', generatedQuests);
     
     generatedQuests.forEach((quest, index) => {
       if (selectedQuests.has(index)) {
@@ -105,20 +118,34 @@ const AIQuestGenerator = ({ onClose }: AIQuestGeneratorProps) => {
 
   const addGoal = (goal: string) => {
     if (goal.trim() && !questParams.goals.includes(goal.trim())) {
+      const newGoals = [...questParams.goals, goal.trim()];
       setQuestParams(prev => ({
         ...prev,
-        goals: [...prev.goals, goal.trim()]
+        goals: newGoals
       }));
-      console.log('Goal added:', goal.trim());
+      console.log('Goal added:', goal.trim(), 'Total goals:', newGoals.length);
     }
   };
 
   const removeGoal = (goalToRemove: string) => {
+    const newGoals = questParams.goals.filter(goal => goal !== goalToRemove);
     setQuestParams(prev => ({
       ...prev,
-      goals: prev.goals.filter(goal => goal !== goalToRemove)
+      goals: newGoals
     }));
-    console.log('Goal removed:', goalToRemove);
+    console.log('Goal removed:', goalToRemove, 'Remaining goals:', newGoals.length);
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    console.log('Key pressed:', e.key);
+    if (e.key === 'Enter') {
+      const value = e.currentTarget.value.trim();
+      console.log('Adding goal from Enter key:', value);
+      if (value) {
+        addGoal(value);
+        e.currentTarget.value = '';
+      }
+    }
   };
 
   const categoryColors = {
@@ -129,6 +156,9 @@ const AIQuestGenerator = ({ onClose }: AIQuestGeneratorProps) => {
     'Fitness': 'from-red-600 to-pink-600',
     'Personal': 'from-purple-600 to-violet-600',
   };
+
+  console.log('=== COMPONENT RENDER ===');
+  console.log('Current state - Loading:', loading, 'Goals:', questParams.goals.length, 'Error:', error);
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -157,7 +187,11 @@ const AIQuestGenerator = ({ onClose }: AIQuestGeneratorProps) => {
                 {questParams.goals.map(goal => (
                   <span key={goal} className="bg-purple-600/20 text-purple-300 px-3 py-1 rounded-full text-sm flex items-center space-x-2">
                     <span>{goal}</span>
-                    <button onClick={() => removeGoal(goal)} className="hover:text-white">
+                    <button 
+                      onClick={() => removeGoal(goal)} 
+                      className="hover:text-white"
+                      type="button"
+                    >
                       <X size={14} />
                     </button>
                   </span>
@@ -167,13 +201,9 @@ const AIQuestGenerator = ({ onClose }: AIQuestGeneratorProps) => {
                 type="text"
                 placeholder="Add a goal (e.g., 'Build portfolio', 'Get fit', 'Learn new skill')"
                 className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:border-purple-500 focus:outline-none"
-                onKeyPress={(e) => {
-                  if (e.key === 'Enter') {
-                    addGoal(e.currentTarget.value);
-                    e.currentTarget.value = '';
-                  }
-                }}
+                onKeyPress={handleKeyPress}
               />
+              <p className="text-xs text-gray-500 mt-1">Press Enter to add goal • Goals: {questParams.goals.length}</p>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -181,7 +211,10 @@ const AIQuestGenerator = ({ onClose }: AIQuestGeneratorProps) => {
                 <label className="block text-sm font-medium mb-2">Skill Level</label>
                 <select
                   value={questParams.skillLevel}
-                  onChange={(e) => setQuestParams(prev => ({ ...prev, skillLevel: e.target.value as any }))}
+                  onChange={(e) => {
+                    console.log('Skill level changed to:', e.target.value);
+                    setQuestParams(prev => ({ ...prev, skillLevel: e.target.value as any }));
+                  }}
                   className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:border-purple-500 focus:outline-none"
                 >
                   <option value="Beginner">Beginner</option>
@@ -193,7 +226,10 @@ const AIQuestGenerator = ({ onClose }: AIQuestGeneratorProps) => {
                 <label className="block text-sm font-medium mb-2">Time Commitment</label>
                 <select
                   value={questParams.timeCommitment}
-                  onChange={(e) => setQuestParams(prev => ({ ...prev, timeCommitment: e.target.value }))}
+                  onChange={(e) => {
+                    console.log('Time commitment changed to:', e.target.value);
+                    setQuestParams(prev => ({ ...prev, timeCommitment: e.target.value }));
+                  }}
                   className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:border-purple-500 focus:outline-none"
                 >
                   <option value="30 minutes daily">30 minutes daily</option>
@@ -206,9 +242,14 @@ const AIQuestGenerator = ({ onClose }: AIQuestGeneratorProps) => {
             </div>
 
             <button
+              type="button"
               onClick={handleGenerateQuests}
               disabled={loading || questParams.goals.length === 0}
-              className="w-full bg-gradient-to-r from-purple-600 to-cyan-600 py-3 rounded-lg font-semibold hover:shadow-lg hover:shadow-purple-500/25 transition-all duration-300 flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className={`w-full py-3 rounded-lg font-semibold transition-all duration-300 flex items-center justify-center space-x-2 ${
+                loading || questParams.goals.length === 0
+                  ? 'bg-gray-600 cursor-not-allowed opacity-50'
+                  : 'bg-gradient-to-r from-purple-600 to-cyan-600 hover:shadow-lg hover:shadow-purple-500/25 cursor-pointer'
+              }`}
             >
               {loading ? (
                 <>
@@ -222,6 +263,11 @@ const AIQuestGenerator = ({ onClose }: AIQuestGeneratorProps) => {
                 </>
               )}
             </button>
+            
+            {/* Debug Info */}
+            <div className="text-xs text-gray-500 space-y-1">
+              <p>Debug: Goals={questParams.goals.length}, Loading={loading ? 'true' : 'false'}, Button Disabled={loading || questParams.goals.length === 0 ? 'true' : 'false'}</p>
+            </div>
           </div>
 
           {/* Error Display */}
@@ -231,6 +277,7 @@ const AIQuestGenerator = ({ onClose }: AIQuestGeneratorProps) => {
               <button
                 onClick={handleGenerateQuests}
                 className="mt-2 flex items-center space-x-2 text-red-300 hover:text-red-200"
+                type="button"
               >
                 <RefreshCw size={16} />
                 <span>Retry</span>
@@ -247,6 +294,7 @@ const AIQuestGenerator = ({ onClose }: AIQuestGeneratorProps) => {
                   onClick={handleAddSelectedQuests}
                   disabled={selectedQuests.size === 0}
                   className="bg-gradient-to-r from-green-600 to-emerald-600 px-4 py-2 rounded-lg font-semibold hover:shadow-lg transition-all duration-300 flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  type="button"
                 >
                   <Plus size={16} />
                   <span>Add Selected ({selectedQuests.size})</span>
