@@ -1,17 +1,22 @@
-
 import React, { useState } from 'react';
 import { useGame } from '../context/GameContext';
-import { Plus, Target, Zap, Flame, Crown, Settings, Lightbulb, Sparkles } from 'lucide-react';
+import { Plus, Target, Zap, Flame, Crown, Settings, Lightbulb, Sparkles, Calendar } from 'lucide-react';
 import QuestSuggestions from './QuestSuggestions';
 import AIQuestGenerator from './AIQuestGenerator';
+import QuestPomodoroLauncher from './QuestPomodoroLauncher';
+import CalendarHeatmap from './CalendarHeatmap';
 
 const QuestBoard = () => {
-  const { habits, completeHabit, character, addHabit } = useGame();
+  const { habits, completeHabit, character, addHabit, startQuestSession } = useGame();
   const [showAddForm, setShowAddForm] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [showAIGenerator, setShowAIGenerator] = useState(false);
+  const [showPomodoroLauncher, setShowPomodoroLauncher] = useState(false);
+  const [selectedQuest, setSelectedQuest] = useState<any>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [newHabit, setNewHabit] = useState({
+  const [showCalendar, setShowCalendar] = useState(false);
+  
+  const newHabit = {
     title: '',
     category: 'Personal',
     xpReward: 25,
@@ -19,7 +24,7 @@ const QuestBoard = () => {
     difficulty: 'basic' as const,
     description: '',
     tier: 1,
-  });
+  };
 
   const categories = ['all', 'Tech', 'Academics', 'Business', 'Content', 'Fitness', 'Personal'];
   const categoryColors = {
@@ -54,6 +59,16 @@ const QuestBoard = () => {
     }
   };
 
+  const handleQuestClick = (habit: any) => {
+    setSelectedQuest(habit);
+    setShowPomodoroLauncher(true);
+  };
+
+  const handlePomodoroConfirm = (quest: any, pomodoroCount: number) => {
+    startQuestSession(quest.id, pomodoroCount);
+    setShowPomodoroLauncher(false);
+  };
+
   const filteredHabits = selectedCategory === 'all' 
     ? habits 
     : habits.filter(habit => habit.category === selectedCategory);
@@ -73,6 +88,13 @@ const QuestBoard = () => {
           </p>
         </div>
         <div className="flex space-x-4">
+          <button
+            onClick={() => setShowCalendar(!showCalendar)}
+            className="flex items-center space-x-2 bg-gradient-to-r from-orange-600 to-red-600 px-4 py-2 rounded-lg font-semibold hover:shadow-lg hover:shadow-orange-500/25 transition-all duration-300"
+          >
+            <Calendar size={18} />
+            <span>History</span>
+          </button>
           <button
             onClick={() => setShowAIGenerator(true)}
             className="flex items-center space-x-2 bg-gradient-to-r from-purple-600 to-pink-600 px-4 py-2 rounded-lg font-semibold hover:shadow-lg hover:shadow-purple-500/25 transition-all duration-300"
@@ -97,6 +119,11 @@ const QuestBoard = () => {
         </div>
       </div>
 
+      {/* Calendar Heatmap */}
+      {showCalendar && (
+        <CalendarHeatmap />
+      )}
+
       {/* Category Filter */}
       <div className="flex flex-wrap gap-2">
         {categories.map(category => (
@@ -117,6 +144,15 @@ const QuestBoard = () => {
       {/* AI Quest Generator Modal */}
       {showAIGenerator && (
         <AIQuestGenerator onClose={() => setShowAIGenerator(false)} />
+      )}
+
+      {/* Quest Pomodoro Launcher Modal */}
+      {showPomodoroLauncher && selectedQuest && (
+        <QuestPomodoroLauncher
+          quest={selectedQuest}
+          onClose={() => setShowPomodoroLauncher(false)}
+          onConfirm={handlePomodoroConfirm}
+        />
       )}
 
       {/* Quest Suggestions Modal */}
@@ -242,13 +278,21 @@ const QuestBoard = () => {
               </div>
 
               {!habit.completed && (
-                <button
-                  onClick={() => completeHabit(habit.id)}
-                  className="w-full bg-gradient-to-r from-purple-600 to-cyan-600 py-3 rounded-lg font-semibold hover:shadow-lg hover:shadow-purple-500/25 transition-all duration-300 flex items-center justify-center space-x-2"
-                >
-                  <Target size={18} />
-                  <span>Complete Quest</span>
-                </button>
+                <div className="space-y-2">
+                  <button
+                    onClick={() => handleQuestClick(habit)}
+                    className="w-full bg-gradient-to-r from-purple-600 to-cyan-600 py-3 rounded-lg font-semibold hover:shadow-lg hover:shadow-purple-500/25 transition-all duration-300 flex items-center justify-center space-x-2"
+                  >
+                    <Target size={18} />
+                    <span>Start Quest</span>
+                  </button>
+                  <button
+                    onClick={() => completeHabit(habit.id)}
+                    className="w-full bg-gray-700/50 py-2 rounded-lg font-medium text-sm hover:bg-gray-600/50 transition-all duration-300"
+                  >
+                    Mark Complete
+                  </button>
+                </div>
               )}
             </div>
           </div>

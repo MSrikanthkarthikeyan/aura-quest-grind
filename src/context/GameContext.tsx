@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { questTemplates, getQuestsForRoles, QuestTemplate } from '../utils/questTemplates';
 
@@ -45,12 +44,21 @@ interface Achievement {
   icon: string;
 }
 
+interface DailyActivity {
+  date: string;
+  questsCompleted: number;
+  pomodorosCompleted: number;
+  xpEarned: number;
+  hasLogin: boolean;
+}
+
 interface GameContextType {
   character: Character;
   habits: Habit[];
   achievements: Achievement[];
   userRoles: UserRoles | null;
   hasCompletedOnboarding: boolean;
+  currentQuestSession: { questId: string; pomodoroCount: number } | null;
   addHabit: (habit: Omit<Habit, 'id' | 'streak' | 'completed'>) => void;
   completeHabit: (habitId: string) => void;
   gainXP: (amount: number, statType?: string) => void;
@@ -59,6 +67,11 @@ interface GameContextType {
   toggleHabit: (habitId: string, enabled: boolean) => void;
   removeHabit: (habitId: string) => void;
   getSuggestedQuests: () => QuestTemplate[];
+  startQuestSession: (questId: string, pomodoroCount: number) => void;
+  completeQuestSession: () => void;
+  getDailyActivity: (date: string) => DailyActivity;
+  getStreakCount: () => number;
+  recordDailyLogin: () => void;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -123,6 +136,13 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     ];
   });
 
+  const [currentQuestSession, setCurrentQuestSession] = useState<{ questId: string; pomodoroCount: number } | null>(null);
+  
+  const [dailyActivities, setDailyActivities] = useState<DailyActivity[]>(() => {
+    const saved = localStorage.getItem('dailyActivities');
+    return saved ? JSON.parse(saved) : [];
+  });
+
   // Save to localStorage whenever state changes
   useEffect(() => {
     localStorage.setItem('character', JSON.stringify(character));
@@ -141,6 +161,75 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     localStorage.setItem('achievements', JSON.stringify(achievements));
   }, [achievements]);
+
+  useEffect(() => {
+    localStorage.setItem('dailyActivities', JSON.stringify(dailyActivities));
+  }, [dailyActivities]);
+
+  // Record login on app start
+  useEffect(() => {
+    recordDailyLogin();
+  }, []);
+
+  const recordDailyLogin = () => {
+    const today = new Date().toISOString().split('T')[0];
+    setDailyActivities(prev => {
+      const existing = prev.find(a => a.date === today);
+      if (existing && existing.hasLogin) return prev;
+      
+      if (existing) {
+        return prev.map(a => a.date === today ? { ...a, hasLogin: true } : a);
+      } else {
+        return [...prev, {
+          date: today,
+          questsCompleted: 0,
+          pomodorosCompleted: 0,
+          xpEarned: 0,
+          hasLogin: true
+        }];
+      }
+    });
+  };
+
+  const getDailyActivity = (date: string): DailyActivity => {
+    const activity = dailyActivities.find(a => a.date === date);
+    return activity || {
+      date,
+      questsCompleted: 0,
+      pomodorosCompleted: 0,
+      xpEarned: 0,
+      hasLogin: false
+    };
+  };
+
+  const getStreakCount = (): number => {
+    const sortedDates = dailyActivities
+      .filter(a => a.hasLogin)
+      .map(a => a.date)
+      .sort()
+      .reverse();
+    
+    if (sortedDates.length === 0) return 0;
+    
+    const today = new Date().toISOString().split('T')[0];
+    if (sortedDates[0] !== today) return 0;
+    
+    let streak = 1;
+    for (let i = 1; i < sortedDates.length; i++) {
+      const current = new Date(sortedDates[i - 1]);
+      const next = new Date(sortedDates[i]);
+      const diffTime = Math.abs(current.getTime() - next.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (diffDays === 1) {
+        streak++;
+      } else {
+        break;
+      }
+    }
+    
+    return streak;
+  };
 
   const setUserRoles = (roles: UserRoles) => {
     setUserRolesState(roles);
@@ -301,6 +390,43 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   };
 
+  const startQuestSession = (questId: string, pomodoroCount: number) => {
+    setCurrentQuestSession({ questId, pomodoroCount });
+  };
+
+  const completeQuestSession = () => {
+    if (currentQuestSession) {
+      completeHabit(currentQuestSession.questId);
+      
+      // Record daily activity
+      const today = new Date().toISOString().split('T')[0];
+      setDailyActivities(prev => {
+        const existing = prev.find(a => a.date === today);
+        const habit = habits.find(h => h.id === currentQuestSession.questId);
+        const xpEarned = habit?.xpReward || 0;
+        
+        if (existing) {
+          return prev.map(a => a.date === today ? {
+            ...a,
+            questsCompleted: a.questsCompleted + 1,
+            pomodorosCompleted: a.pomodorosCompleted + currentQuestSession.pomodoroCount,
+            xpEarned: a.xpEarned + xpEarned
+          } : a);
+        } else {
+          return [...prev, {
+            date: today,
+            questsCompleted: 1,
+            pomodorosCompleted: currentQuestSession.pomodoroCount,
+            xpEarned,
+            hasLogin: true
+          }];
+        }
+      });
+      
+      setCurrentQuestSession(null);
+    }
+  };
+
   return (
     <GameContext.Provider value={{
       character,
@@ -308,6 +434,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       achievements,
       userRoles,
       hasCompletedOnboarding,
+      currentQuestSession,
       addHabit,
       completeHabit,
       gainXP,
@@ -316,6 +443,11 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       toggleHabit,
       removeHabit,
       getSuggestedQuests,
+      startQuestSession,
+      completeQuestSession,
+      getDailyActivity,
+      getStreakCount,
+      recordDailyLogin,
     }}>
       {children}
     </GameContext.Provider>

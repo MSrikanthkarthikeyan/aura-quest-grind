@@ -1,14 +1,24 @@
-
 import React, { useState, useEffect } from 'react';
 import { useGame } from '../context/GameContext';
-import { Play, Pause, Square, Timer } from 'lucide-react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import { Play, Pause, Square, Timer, CheckCircle, Target } from 'lucide-react';
 
 const PomodoroTimer = () => {
-  const { gainXP } = useGame();
+  const { gainXP, currentQuestSession, completeQuestSession, habits } = useGame();
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  
+  const questId = searchParams.get('quest');
+  const initialPomodoros = parseInt(searchParams.get('pomodoros') || '1');
+  
   const [time, setTime] = useState(25 * 60); // 25 minutes in seconds
   const [isActive, setIsActive] = useState(false);
   const [isBreak, setIsBreak] = useState(false);
   const [sessions, setSessions] = useState(0);
+  const [totalPomodoros] = useState(initialPomodoros);
+  const [questCompleted, setQuestCompleted] = useState(false);
+
+  const currentQuest = questId ? habits.find(h => h.id === questId) : null;
 
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
@@ -21,7 +31,14 @@ const PomodoroTimer = () => {
       // Session completed
       if (!isBreak) {
         gainXP(50, 'wisdom'); // Focus session XP
-        setSessions(prev => prev + 1);
+        setSessions(prev => {
+          const newSessions = prev + 1;
+          // Check if all pomodoros completed
+          if (newSessions >= totalPomodoros && currentQuest) {
+            handleQuestCompletion();
+          }
+          return newSessions;
+        });
       }
       
       // Auto-switch between work and break
@@ -33,7 +50,24 @@ const PomodoroTimer = () => {
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [isActive, time, isBreak, gainXP]);
+  }, [isActive, time, isBreak, gainXP, totalPomodoros, currentQuest]);
+
+  const handleQuestCompletion = () => {
+    if (currentQuest && !questCompleted) {
+      completeQuestSession();
+      setQuestCompleted(true);
+    }
+  };
+
+  const handleForceComplete = () => {
+    if (currentQuest && !questCompleted) {
+      handleQuestCompletion();
+    }
+  };
+
+  const handleReturnToQuests = () => {
+    navigate('/habits');
+  };
 
   const toggleTimer = () => {
     setIsActive(!isActive);
@@ -52,15 +86,58 @@ const PomodoroTimer = () => {
   };
 
   const progress = ((isBreak ? 5 * 60 : 25 * 60) - time) / (isBreak ? 5 * 60 : 25 * 60) * 100;
+  const questProgress = (sessions / totalPomodoros) * 100;
 
   return (
     <div className="p-8 space-y-8">
       <div className="text-center">
         <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent mb-2">
-          Dungeon Raids
+          {currentQuest ? 'Quest Focus Session' : 'Dungeon Raids'}
         </h1>
-        <p className="text-gray-400">Focus sessions to level up your mind</p>
+        <p className="text-gray-400">
+          {currentQuest ? `Conquering: ${currentQuest.title}` : 'Focus sessions to level up your mind'}
+        </p>
       </div>
+
+      {/* Quest Progress Bar */}
+      {currentQuest && (
+        <div className="max-w-2xl mx-auto">
+          <div className="bg-gradient-to-br from-gray-900/90 to-cyan-900/40 rounded-xl p-4 border border-cyan-500/30">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-cyan-300 font-medium">Quest Progress</span>
+              <span className="text-white font-bold">{sessions}/{totalPomodoros} Pomodoros</span>
+            </div>
+            <div className="w-full bg-gray-700 rounded-full h-3 mb-2">
+              <div 
+                className="bg-gradient-to-r from-cyan-500 to-blue-500 h-3 rounded-full transition-all duration-500"
+                style={{ width: `${questProgress}%` }}
+              />
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-cyan-400">{currentQuest.category}</span>
+              <span className="text-yellow-400">{currentQuest.xpReward} XP</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quest Completion Modal */}
+      {questCompleted && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-gradient-to-br from-green-900/95 to-emerald-900/50 rounded-2xl border border-green-500/30 max-w-md w-full p-6 text-center">
+            <CheckCircle className="mx-auto mb-4 text-green-400" size={48} />
+            <h2 className="text-2xl font-bold text-white mb-2">Quest Completed!</h2>
+            <p className="text-green-300 mb-1">{currentQuest?.title}</p>
+            <p className="text-gray-400 text-sm mb-6">+{currentQuest?.xpReward} XP earned</p>
+            <button
+              onClick={handleReturnToQuests}
+              className="w-full bg-gradient-to-r from-green-600 to-emerald-600 py-3 rounded-lg font-semibold hover:shadow-lg transition-all duration-300"
+            >
+              Return to Quest Board
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Main Timer */}
       <div className="max-w-2xl mx-auto">
@@ -70,7 +147,8 @@ const PomodoroTimer = () => {
               {isBreak ? '🧘 Shadow Rest' : '⚔️ Focus Dungeon'}
             </h2>
             <p className="text-gray-400">
-              {isBreak ? 'Restore your mana' : 'Battle the distractions'}
+              {isBreak ? 'Restore your mana' : 
+               currentQuest ? `Block ${sessions + 1} of ${totalPomodoros}` : 'Battle the distractions'}
             </p>
           </div>
 
@@ -133,6 +211,16 @@ const PomodoroTimer = () => {
               <Square size={20} />
               <span>Reset</span>
             </button>
+            
+            {currentQuest && !questCompleted && (
+              <button
+                onClick={handleForceComplete}
+                className="flex items-center space-x-2 px-6 py-4 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl font-semibold hover:shadow-lg hover:shadow-green-500/25 transition-all duration-300"
+              >
+                <CheckCircle size={20} />
+                <span>Complete Quest</span>
+              </button>
+            )}
           </div>
         </div>
       </div>
