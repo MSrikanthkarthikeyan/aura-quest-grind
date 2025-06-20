@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { firebaseDataService } from '../services/firebaseDataService';
-import { generateProfileSummary } from '../services/geminiService';
+import { generateOnboardingResponse } from '../services/geminiService';
 import { Send, Sparkles, Bot, User as UserIcon } from 'lucide-react';
 
 interface Message {
@@ -25,30 +25,24 @@ interface UserProfile {
 interface ProfileAnswers {
   mainGoal?: string;
   focusAreas?: string[];
-  dailyHours?: number;
+  dailyCommitment?: string;
   questStyle?: string;
-  notes?: string;
+  personalNote?: string;
+  skillLevel?: string;
 }
 
 interface AIOnboardingProps {
   onComplete: (profile: UserProfile) => void;
 }
 
-const ONBOARDING_PROMPTS = [
-  "🎤 Hey hunter, welcome to AuraQuestGrind! What's your main goal these days? (e.g., build consistency, level up in coding, fitness, business, study routines)",
-  "🎯 Which areas do you want to focus on right now? (Pick all that apply: Fitness, Coding, Business, Academics, Content Creation, Language Learning, etc.)",
-  "⏰ How many hours can you commit daily for your quests?",
-  "⚔️ What's your preferred quest style? (Choose one: Structured schedule, Flexible missions, Random daily challenges)",
-  "💡 Anything else you'd like to tell your AI mentor? (e.g., 'I'm preparing for a job', 'Want to get shredded', etc.)"
-];
-
 const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
   const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [currentPrompt, setCurrentPrompt] = useState(0);
-  const [answers, setAnswers] = useState<ProfileAnswers>({});
+  const [userInputCount, setUserInputCount] = useState(0);
+  const [collectedData, setCollectedData] = useState<ProfileAnswers>({});
+  const [conversationHistory, setConversationHistory] = useState<string>('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -60,47 +54,19 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
   }, [messages]);
 
   useEffect(() => {
-    // Start with the first prompt
+    // Start with an AI-generated welcome message
     const welcomeMessage: Message = {
       id: '1',
-      text: ONBOARDING_PROMPTS[0],
+      text: "🎮 Hey there, future hunter! Welcome to AuraQuestGrind! I'm your AI mentor, and I'm here to create the perfect quest experience just for you. What brings you here today? Are you looking to level up in coding, get fit, build better habits, or something else entirely?",
       isUser: false,
       timestamp: new Date()
     };
     setMessages([welcomeMessage]);
+    setConversationHistory('AI: ' + welcomeMessage.text + '\n');
   }, [user]);
 
-  const parseUserResponse = (response: string, promptIndex: number): Partial<ProfileAnswers> => {
-    switch (promptIndex) {
-      case 0:
-        return { mainGoal: response };
-      case 1:
-        // Parse focus areas from response
-        const focusOptions = ['fitness', 'coding', 'business', 'academics', 'content creation', 'language learning'];
-        const focusAreas = focusOptions.filter(area => 
-          response.toLowerCase().includes(area) || 
-          response.toLowerCase().includes(area.replace(' ', ''))
-        );
-        return { focusAreas: focusAreas.length > 0 ? focusAreas : [response] };
-      case 2:
-        // Extract number from response
-        const hours = response.match(/\d+/);
-        return { dailyHours: hours ? parseInt(hours[0]) : 1 };
-      case 3:
-        // Normalize quest style
-        let questStyle = 'Flexible missions';
-        if (response.toLowerCase().includes('structured')) questStyle = 'Structured schedule';
-        else if (response.toLowerCase().includes('random')) questStyle = 'Random daily challenges';
-        return { questStyle };
-      case 4:
-        return { notes: response };
-      default:
-        return {};
-    }
-  };
-
   const handleSendMessage = async () => {
-    if (!inputValue.trim() || isLoading) return;
+    if (!inputValue.trim() || isLoading || userInputCount >= 5) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -111,71 +77,99 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
 
     setMessages(prev => [...prev, userMessage]);
     
-    // Parse and store the answer
-    const parsedAnswer = parseUserResponse(inputValue, currentPrompt);
-    const updatedAnswers = { ...answers, ...parsedAnswer };
-    setAnswers(updatedAnswers);
+    // Update conversation history
+    const newHistory = conversationHistory + `User: ${inputValue}\n`;
+    setConversationHistory(newHistory);
+    
+    const newInputCount = userInputCount + 1;
+    setUserInputCount(newInputCount);
     
     setInputValue('');
     setIsLoading(true);
 
     try {
-      // Check if we have more prompts
-      if (currentPrompt < ONBOARDING_PROMPTS.length - 1) {
-        // Move to next prompt
-        const nextPromptIndex = currentPrompt + 1;
-        const nextMessage: Message = {
+      if (newInputCount >= 5) {
+        // Final input reached - complete onboarding
+        await completeOnboarding(newHistory);
+      } else {
+        // Continue conversation with AI
+        const response = await generateOnboardingResponse(
+          newHistory,
+          newInputCount,
+          collectedData
+        );
+        
+        // Update collected data
+        if (response.extractedData) {
+          setCollectedData(prev => ({ ...prev, ...response.extractedData }));
+        }
+        
+        const aiMessage: Message = {
           id: (Date.now() + 1).toString(),
-          text: ONBOARDING_PROMPTS[nextPromptIndex],
+          text: response.message,
           isUser: false,
           timestamp: new Date()
         };
         
-        setTimeout(() => {
-          setMessages(prev => [...prev, nextMessage]);
-          setCurrentPrompt(nextPromptIndex);
-          setIsLoading(false);
-        }, 1000);
-      } else {
-        // All prompts completed, generate summary
-        await completeOnboarding(updatedAnswers);
+        setMessages(prev => [...prev, aiMessage]);
+        setConversationHistory(newHistory + `AI: ${response.message}\n`);
+        setIsLoading(false);
       }
     } catch (error) {
       console.error('Error processing response:', error);
+      
+      // Fallback response
+      const fallbackMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        text: newInputCount >= 5 
+          ? "🎉 Perfect! I've got everything I need. Let me set up your personalized quest profile!"
+          : "That's great! Tell me more about what you'd like to focus on.",
+        isUser: false,
+        timestamp: new Date()
+      };
+      
+      setMessages(prev => [...prev, fallbackMessage]);
       setIsLoading(false);
+      
+      if (newInputCount >= 5) {
+        setTimeout(() => completeOnboarding(newHistory), 2000);
+      }
     }
   };
 
-  const completeOnboarding = async (finalAnswers: ProfileAnswers) => {
+  const completeOnboarding = async (finalHistory: string) => {
     if (!user) return;
 
     try {
-      // Generate AI summary
-      const summary = await generateProfileSummary(finalAnswers);
+      // Get final AI analysis
+      const finalResponse = await generateOnboardingResponse(
+        finalHistory,
+        5,
+        collectedData,
+        true // Indicate this is the final analysis
+      );
       
-      // Convert to UserProfile format for compatibility
+      // Convert to UserProfile format
       const profile: UserProfile = {
-        interests: finalAnswers.focusAreas || ['Personal Development'],
-        goals: finalAnswers.mainGoal || 'Improve productivity',
-        routine: `${finalAnswers.dailyHours || 1} hours daily`,
-        questStyle: finalAnswers.questStyle || 'Flexible missions',
-        timeCommitment: `${finalAnswers.dailyHours || 1} hours daily`,
-        fitnessPreferences: finalAnswers.focusAreas?.includes('fitness') ? ['General'] : [],
-        skillLevel: 'Intermediate'
+        interests: finalResponse.finalProfile?.interests || collectedData.focusAreas || ['Personal Development'],
+        goals: finalResponse.finalProfile?.goals || collectedData.mainGoal || 'Improve productivity',
+        routine: finalResponse.finalProfile?.routine || collectedData.dailyCommitment || '1-2 hours daily',
+        questStyle: finalResponse.finalProfile?.questStyle || collectedData.questStyle || 'Flexible missions',
+        timeCommitment: finalResponse.finalProfile?.timeCommitment || collectedData.dailyCommitment || '1-2 hours daily',
+        fitnessPreferences: finalResponse.finalProfile?.fitnessPreferences || [],
+        skillLevel: finalResponse.finalProfile?.skillLevel || collectedData.skillLevel || 'Intermediate'
       };
 
       // Save to Firebase
       await firebaseDataService.saveUserProfile(user.uid, profile);
-      
-      // Also save the structured profile
       await firebaseDataService.saveGameData(user.uid, {
-        userProfile: finalAnswers,
+        userProfile: collectedData,
         lastUpdated: new Date()
       });
       
       const completionMessage: Message = {
         id: (Date.now() + 1).toString(),
-        text: `🎉 Perfect! I've analyzed your responses and created your personalized quest profile. ${summary}\n\nYour adventure begins now - let's start grinding those quests and level up together!`,
+        text: finalResponse.message || `🎉 Perfect! I've analyzed our conversation and created your personalized quest profile. You're all set to start your ${profile.interests.join(' and ')} journey with ${profile.timeCommitment} of daily commitment. Let's begin your adventure!`,
         isUser: false,
         timestamp: new Date()
       };
@@ -193,13 +187,13 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
       
       // Fallback completion
       const fallbackProfile: UserProfile = {
-        interests: finalAnswers.focusAreas || ['Personal Development'],
-        goals: finalAnswers.mainGoal || 'Improve productivity',
-        routine: `${finalAnswers.dailyHours || 1} hours daily`,
-        questStyle: finalAnswers.questStyle || 'Flexible missions',
-        timeCommitment: `${finalAnswers.dailyHours || 1} hours daily`,
+        interests: collectedData.focusAreas || ['Personal Development'],
+        goals: collectedData.mainGoal || 'Improve productivity',
+        routine: collectedData.dailyCommitment || '1-2 hours daily',
+        questStyle: collectedData.questStyle || 'Flexible missions',
+        timeCommitment: collectedData.dailyCommitment || '1-2 hours daily',
         fitnessPreferences: [],
-        skillLevel: 'Intermediate'
+        skillLevel: collectedData.skillLevel || 'Intermediate'
       };
       
       const errorMessage: Message = {
@@ -239,11 +233,11 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
                 <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent">
                   AuraQuestGrind Setup
                 </h1>
-                <p className="text-gray-300">Quick setup to personalize your quest experience</p>
+                <p className="text-gray-300">AI-powered personalization (max 5 questions)</p>
               </div>
             </div>
             <div className="text-sm text-gray-400">
-              {currentPrompt + 1} / {ONBOARDING_PROMPTS.length}
+              {userInputCount} / 5 inputs
             </div>
           </div>
         </div>
@@ -304,13 +298,13 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Type your response..."
+              placeholder={userInputCount >= 5 ? "Onboarding complete!" : "Type your response..."}
               className="flex-1 bg-gray-800/50 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none"
-              disabled={isLoading}
+              disabled={isLoading || userInputCount >= 5}
             />
             <button
               onClick={handleSendMessage}
-              disabled={isLoading || !inputValue.trim()}
+              disabled={isLoading || !inputValue.trim() || userInputCount >= 5}
               className="bg-gradient-to-r from-purple-600 to-cyan-600 p-3 rounded-lg hover:shadow-lg hover:shadow-purple-500/25 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Send size={20} />

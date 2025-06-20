@@ -149,14 +149,16 @@ Write a friendly, RPG-themed summary that acknowledges their goals and shows you
 
 export const generateOnboardingResponse = async (
   conversationHistory: string,
-  questionsAsked: number,
-  currentData: Partial<UserProfile>
+  userInputCount: number,
+  currentData: Partial<ProfileAnswers>,
+  isFinalAnalysis: boolean = false
 ): Promise<OnboardingResponse> => {
   console.log('Onboarding AI: Starting conversation generation');
-  console.log('Questions asked so far:', questionsAsked);
+  console.log('User inputs so far:', userInputCount);
   console.log('Current data:', currentData);
+  console.log('Is final analysis:', isFinalAnalysis);
 
-  const prompt = createOnboardingPrompt(conversationHistory, questionsAsked, currentData);
+  const prompt = createDynamicOnboardingPrompt(conversationHistory, userInputCount, currentData, isFinalAnalysis);
   
   try {
     const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
@@ -188,11 +190,11 @@ export const generateOnboardingResponse = async (
       throw new Error('No response generated');
     }
 
-    return parseOnboardingResponse(generatedText, questionsAsked, currentData);
+    return parseOnboardingResponse(generatedText, userInputCount, currentData, isFinalAnalysis);
     
   } catch (error) {
     console.error('Onboarding AI Error:', error);
-    return getFallbackResponse(questionsAsked, currentData);
+    return getFallbackResponse(userInputCount, currentData, isFinalAnalysis);
   }
 };
 
@@ -227,61 +229,100 @@ Requirements:
 Return only the JSON array, no additional text.`;
 };
 
-const createOnboardingPrompt = (
+const createDynamicOnboardingPrompt = (
   conversationHistory: string,
-  questionsAsked: number,
-  currentData: Partial<UserProfile>
+  userInputCount: number,
+  currentData: Partial<ProfileAnswers>,
+  isFinalAnalysis: boolean
 ): string => {
-  const maxQuestions = 5;
-  const isNearEnd = questionsAsked >= maxQuestions - 2;
+  const maxInputs = 5;
+  const remainingInputs = maxInputs - userInputCount;
 
-  return `You are an AI companion for AuraQuestGrind, a gamified habit tracker and productivity app. You're having a friendly onboarding conversation with a new user.
-
-CONTEXT:
-- This is question #${questionsAsked + 1} in the onboarding flow
-- Maximum questions: ${maxQuestions}
-- Current user data collected: ${JSON.stringify(currentData)}
+  if (isFinalAnalysis) {
+    return `You are completing the onboarding for AuraQuestGrind. Based on the conversation history, create a final summary and complete user profile.
 
 CONVERSATION HISTORY:
 ${conversationHistory}
 
-YOUR ROLE:
-- Be friendly, encouraging, and gaming-themed (think RPG/anime vibes)
-- Ask ONE focused question per response
-- Keep responses under 100 words
-- Use emojis and gaming terminology (quests, level up, grinding, etc.)
+CURRENT DATA COLLECTED:
+${JSON.stringify(currentData)}
+
+Create a final response with:
+1. A celebratory message acknowledging their goals
+2. A complete user profile extraction
+
+RESPONSE FORMAT:
+{
+  "message": "Encouraging completion message with summary of their goals (keep under 150 words)",
+  "extractedData": {
+    "mainGoal": "main objective",
+    "focusAreas": ["area1", "area2"],
+    "dailyCommitment": "time commitment",
+    "questStyle": "preferred style",
+    "personalNote": "additional context",
+    "skillLevel": "beginner/intermediate/advanced"
+  },
+  "isComplete": true,
+  "finalProfile": {
+    "interests": ["converted focus areas"],
+    "goals": "main goal summary",
+    "routine": "routine description",
+    "questStyle": "quest style preference",
+    "timeCommitment": "time commitment",
+    "fitnessPreferences": ["fitness related areas if any"],
+    "skillLevel": "skill level"
+  }
+}
+
+Return only valid JSON.`;
+  }
+
+  return `You are an AI mentor for AuraQuestGrind, a gamified productivity app. You're having a natural conversation with a new user to understand their goals and preferences.
+
+CONVERSATION SO FAR:
+${conversationHistory}
+
+CONTEXT:
+- This is input #${userInputCount} out of ${maxInputs} maximum
+- Remaining inputs: ${remainingInputs}
+- Current data: ${JSON.stringify(currentData)}
+
+YOUR TASK:
+- Ask ONE natural, conversational question that helps understand their goals, interests, or preferences
+- Be friendly, encouraging, and use gaming terminology
+- Keep responses under 80 words
+- ${remainingInputs <= 2 ? 'Focus on missing key information since you\'re running out of inputs' : 'Continue natural conversation flow'}
 
 INFORMATION TO GATHER:
-1. Main interests/focus areas (tech, fitness, academics, business, personal)
-2. Specific goals they want to achieve
-3. Available time commitment (daily hours/routine)
-4. Preferred learning/work style (structured vs flexible)
-5. Skill level (beginner, intermediate, advanced)
+- Main goals (career, fitness, academics, personal growth)
+- Focus areas/interests  
+- Daily time commitment
+- Preferred style (structured vs flexible)
+- Skill level
+- Personal context/motivation
 
 RESPONSE FORMAT:
 {
   "message": "Your conversational response with next question",
   "extractedData": {
-    "interests": ["array", "of", "interests"],
-    "goals": "summarized goals",
-    "timeCommitment": "time info",
-    "routine": "routine preferences",
-    "questStyle": "style preferences",
-    "skillLevel": "skill level"
+    "mainGoal": "extracted goal if mentioned",
+    "focusAreas": ["extracted interests"],
+    "dailyCommitment": "time mentioned if any", 
+    "questStyle": "style preference if mentioned",
+    "personalNote": "additional context",
+    "skillLevel": "skill level if mentioned"
   },
-  "isComplete": ${isNearEnd ? 'true if you have enough info' : 'false'},
-  "finalProfile": ${isNearEnd ? 'complete profile object if ready' : 'null'}
+  "isComplete": false
 }
-
-${isNearEnd ? 'If you have enough information, set isComplete to true and provide a complete finalProfile object.' : 'Continue gathering information naturally.'}
 
 Return only valid JSON.`;
 };
 
 const parseOnboardingResponse = (
   response: string,
-  questionsAsked: number,
-  currentData: Partial<UserProfile>
+  userInputCount: number,
+  currentData: Partial<ProfileAnswers>,
+  isFinalAnalysis: boolean = false
 ): OnboardingResponse => {
   try {
     // Extract JSON from response
@@ -296,49 +337,63 @@ const parseOnboardingResponse = (
     const mergedData = { ...currentData, ...parsed.extractedData };
     
     return {
-      message: parsed.message || 'Let me know more about your goals!',
-      extractedData: parsed.extractedData,
-      isComplete: parsed.isComplete || false,
-      finalProfile: parsed.isComplete ? createCompleteProfile(mergedData) : undefined
+      message: parsed.message || 'Tell me more about your goals!',
+      extractedData: parsed.extractedData || {},
+      isComplete: parsed.isComplete || isFinalAnalysis,
+      finalProfile: parsed.finalProfile || (isFinalAnalysis ? createCompleteProfile(mergedData) : undefined)
     };
     
   } catch (error) {
     console.error('Error parsing onboarding response:', error);
-    return getFallbackResponse(questionsAsked, currentData);
+    return getFallbackResponse(userInputCount, currentData, isFinalAnalysis);
   }
 };
 
-const createCompleteProfile = (data: Partial<UserProfile>): UserProfile => {
+const createCompleteProfile = (data: Partial<ProfileAnswers>): UserProfile => {
   return {
-    interests: data.interests || ['Personal Development'],
-    goals: data.goals || 'Improve productivity and build better habits',
-    routine: data.routine || 'Flexible schedule',
+    interests: data.focusAreas || ['Personal Development'],
+    goals: data.mainGoal || 'Improve productivity and build better habits',
+    routine: data.dailyCommitment || 'Flexible schedule',
     questStyle: data.questStyle || 'Gamified',
-    timeCommitment: data.timeCommitment || '1-2 hours daily',
-    fitnessPreferences: data.fitnessPreferences || [],
+    timeCommitment: data.dailyCommitment || '1-2 hours daily',
+    fitnessPreferences: data.focusAreas?.filter(area => 
+      area.toLowerCase().includes('fitness') || 
+      area.toLowerCase().includes('health') ||
+      area.toLowerCase().includes('workout')
+    ) || [],
     skillLevel: data.skillLevel || 'Intermediate'
   };
 };
 
 const getFallbackResponse = (
-  questionsAsked: number,
-  currentData: Partial<UserProfile>
+  userInputCount: number,
+  currentData: Partial<ProfileAnswers>,
+  isFinalAnalysis: boolean = false
 ): OnboardingResponse => {
+  if (isFinalAnalysis) {
+    return {
+      message: "🎉 Perfect! I've got everything I need to create your personalized quest profile. Your adventure is about to begin!",
+      extractedData: {},
+      isComplete: true,
+      finalProfile: createCompleteProfile(currentData)
+    };
+  }
+
   const fallbackQuestions = [
-    "What areas would you like to focus on? (tech, fitness, academics, etc.)",
-    "What are your main goals for self-improvement?",
-    "How much time can you dedicate daily to your quests?",
-    "Do you prefer structured routines or flexible challenges?",
-    "What's your current skill level in your main areas of interest?"
+    "🎯 What's your main goal right now? (e.g., get fit, learn coding, build habits)",
+    "💪 Which areas interest you most? (tech, fitness, academics, business, etc.)",
+    "⏰ How much time can you dedicate daily to your quests?",
+    "⚔️ Do you prefer structured schedules or flexible challenges?",
+    "🚀 What's your experience level in your main areas of focus?"
   ];
 
-  const question = fallbackQuestions[Math.min(questionsAsked, fallbackQuestions.length - 1)];
+  const question = fallbackQuestions[Math.min(userInputCount - 1, fallbackQuestions.length - 1)];
   
   return {
-    message: `🎮 ${question}`,
+    message: question,
     extractedData: {},
-    isComplete: questionsAsked >= 4,
-    finalProfile: questionsAsked >= 4 ? createCompleteProfile(currentData) : undefined
+    isComplete: userInputCount >= 5,
+    finalProfile: userInputCount >= 5 ? createCompleteProfile(currentData) : undefined
   };
 };
 
