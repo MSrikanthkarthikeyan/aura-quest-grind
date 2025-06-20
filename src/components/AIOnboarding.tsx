@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { firebaseDataService } from '../services/firebaseDataService';
-import { generateOnboardingResponse } from '../services/geminiService';
+import { generateProfileSummary } from '../services/geminiService';
 import { Send, Sparkles, Bot, User as UserIcon } from 'lucide-react';
 
 interface Message {
@@ -22,17 +22,33 @@ interface UserProfile {
   skillLevel: string;
 }
 
+interface ProfileAnswers {
+  mainGoal?: string;
+  focusAreas?: string[];
+  dailyHours?: number;
+  questStyle?: string;
+  notes?: string;
+}
+
 interface AIOnboardingProps {
   onComplete: (profile: UserProfile) => void;
 }
+
+const ONBOARDING_PROMPTS = [
+  "🎤 Hey hunter, welcome to AuraQuestGrind! What's your main goal these days? (e.g., build consistency, level up in coding, fitness, business, study routines)",
+  "🎯 Which areas do you want to focus on right now? (Pick all that apply: Fitness, Coding, Business, Academics, Content Creation, Language Learning, etc.)",
+  "⏰ How many hours can you commit daily for your quests?",
+  "⚔️ What's your preferred quest style? (Choose one: Structured schedule, Flexible missions, Random daily challenges)",
+  "💡 Anything else you'd like to tell your AI mentor? (e.g., 'I'm preparing for a job', 'Want to get shredded', etc.)"
+];
 
 const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
   const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [conversationData, setConversationData] = useState<Partial<UserProfile>>({});
-  const [questionsAsked, setQuestionsAsked] = useState(0);
+  const [currentPrompt, setCurrentPrompt] = useState(0);
+  const [answers, setAnswers] = useState<ProfileAnswers>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -44,15 +60,44 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
   }, [messages]);
 
   useEffect(() => {
-    // Start the conversation
+    // Start with the first prompt
     const welcomeMessage: Message = {
       id: '1',
-      text: `🎮 Welcome to AuraQuestGrind, ${user?.displayName || 'Hunter'}! I'm your AI companion here to create the perfect quest experience for you. Let's start by getting to know you better. What are your main goals or areas you want to improve in? (Tech, fitness, academics, business, personal development, etc.)`,
+      text: ONBOARDING_PROMPTS[0],
       isUser: false,
       timestamp: new Date()
     };
     setMessages([welcomeMessage]);
   }, [user]);
+
+  const parseUserResponse = (response: string, promptIndex: number): Partial<ProfileAnswers> => {
+    switch (promptIndex) {
+      case 0:
+        return { mainGoal: response };
+      case 1:
+        // Parse focus areas from response
+        const focusOptions = ['fitness', 'coding', 'business', 'academics', 'content creation', 'language learning'];
+        const focusAreas = focusOptions.filter(area => 
+          response.toLowerCase().includes(area) || 
+          response.toLowerCase().includes(area.replace(' ', ''))
+        );
+        return { focusAreas: focusAreas.length > 0 ? focusAreas : [response] };
+      case 2:
+        // Extract number from response
+        const hours = response.match(/\d+/);
+        return { dailyHours: hours ? parseInt(hours[0]) : 1 };
+      case 3:
+        // Normalize quest style
+        let questStyle = 'Flexible missions';
+        if (response.toLowerCase().includes('structured')) questStyle = 'Structured schedule';
+        else if (response.toLowerCase().includes('random')) questStyle = 'Random daily challenges';
+        return { questStyle };
+      case 4:
+        return { notes: response };
+      default:
+        return {};
+    }
+  };
 
   const handleSendMessage = async () => {
     if (!inputValue.trim() || isLoading) return;
@@ -65,74 +110,78 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
     };
 
     setMessages(prev => [...prev, userMessage]);
+    
+    // Parse and store the answer
+    const parsedAnswer = parseUserResponse(inputValue, currentPrompt);
+    const updatedAnswers = { ...answers, ...parsedAnswer };
+    setAnswers(updatedAnswers);
+    
     setInputValue('');
     setIsLoading(true);
 
     try {
-      const conversationHistory = [...messages, userMessage]
-        .map(m => `${m.isUser ? 'User' : 'AI'}: ${m.text}`)
-        .join('\n');
-
-      const response = await generateOnboardingResponse(
-        conversationHistory,
-        questionsAsked,
-        conversationData
-      );
-
-      console.log('AI Response:', response);
-
-      const aiMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        text: response.message,
-        isUser: false,
-        timestamp: new Date()
-      };
-
-      setMessages(prev => [...prev, aiMessage]);
-      
-      // Update conversation data with extracted information
-      if (response.extractedData) {
-        setConversationData(prev => ({ ...prev, ...response.extractedData }));
-      }
-
-      setQuestionsAsked(prev => prev + 1);
-
-      // Check if we have enough information to complete onboarding
-      if (response.isComplete && response.finalProfile) {
+      // Check if we have more prompts
+      if (currentPrompt < ONBOARDING_PROMPTS.length - 1) {
+        // Move to next prompt
+        const nextPromptIndex = currentPrompt + 1;
+        const nextMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          text: ONBOARDING_PROMPTS[nextPromptIndex],
+          isUser: false,
+          timestamp: new Date()
+        };
+        
         setTimeout(() => {
-          completeOnboarding(response.finalProfile);
-        }, 2000);
+          setMessages(prev => [...prev, nextMessage]);
+          setCurrentPrompt(nextPromptIndex);
+          setIsLoading(false);
+        }, 1000);
+      } else {
+        // All prompts completed, generate summary
+        await completeOnboarding(updatedAnswers);
       }
-
     } catch (error) {
-      console.error('Error getting AI response:', error);
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        text: "I'm having trouble connecting right now. Let's continue with a quick setup instead. What areas would you like to focus on? (Just type a few keywords)",
-        isUser: false,
-        timestamp: new Date()
-      };
-      setMessages(prev => [...prev, errorMessage]);
-    } finally {
+      console.error('Error processing response:', error);
       setIsLoading(false);
     }
   };
 
-  const completeOnboarding = async (profile: UserProfile) => {
+  const completeOnboarding = async (finalAnswers: ProfileAnswers) => {
     if (!user) return;
 
     try {
-      // Save profile to Firebase
+      // Generate AI summary
+      const summary = await generateProfileSummary(finalAnswers);
+      
+      // Convert to UserProfile format for compatibility
+      const profile: UserProfile = {
+        interests: finalAnswers.focusAreas || ['Personal Development'],
+        goals: finalAnswers.mainGoal || 'Improve productivity',
+        routine: `${finalAnswers.dailyHours || 1} hours daily`,
+        questStyle: finalAnswers.questStyle || 'Flexible missions',
+        timeCommitment: `${finalAnswers.dailyHours || 1} hours daily`,
+        fitnessPreferences: finalAnswers.focusAreas?.includes('fitness') ? ['General'] : [],
+        skillLevel: 'Intermediate'
+      };
+
+      // Save to Firebase
       await firebaseDataService.saveUserProfile(user.uid, profile);
+      
+      // Also save the structured profile
+      await firebaseDataService.saveGameData(user.uid, {
+        userProfile: finalAnswers,
+        lastUpdated: new Date()
+      });
       
       const completionMessage: Message = {
         id: (Date.now() + 1).toString(),
-        text: `🎉 Perfect! I've created your personalized quest profile. Your adventure begins now - let's start grinding those quests and level up together!`,
+        text: `🎉 Perfect! I've analyzed your responses and created your personalized quest profile. ${summary}\n\nYour adventure begins now - let's start grinding those quests and level up together!`,
         isUser: false,
         timestamp: new Date()
       };
       
       setMessages(prev => [...prev, completionMessage]);
+      setIsLoading(false);
       
       // Complete onboarding after a short delay
       setTimeout(() => {
@@ -140,7 +189,32 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
       }, 3000);
       
     } catch (error) {
-      console.error('Error saving profile:', error);
+      console.error('Error completing onboarding:', error);
+      
+      // Fallback completion
+      const fallbackProfile: UserProfile = {
+        interests: finalAnswers.focusAreas || ['Personal Development'],
+        goals: finalAnswers.mainGoal || 'Improve productivity',
+        routine: `${finalAnswers.dailyHours || 1} hours daily`,
+        questStyle: finalAnswers.questStyle || 'Flexible missions',
+        timeCommitment: `${finalAnswers.dailyHours || 1} hours daily`,
+        fitnessPreferences: [],
+        skillLevel: 'Intermediate'
+      };
+      
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        text: "🎉 Your profile has been created! Let's start your quest adventure!",
+        isUser: false,
+        timestamp: new Date()
+      };
+      
+      setMessages(prev => [...prev, errorMessage]);
+      setIsLoading(false);
+      
+      setTimeout(() => {
+        onComplete(fallbackProfile);
+      }, 2000);
     }
   };
 
@@ -156,15 +230,20 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
       <div className="w-full max-w-4xl bg-gray-900/80 backdrop-blur-lg rounded-2xl border border-purple-500/30 overflow-hidden">
         {/* Header */}
         <div className="bg-gradient-to-r from-purple-600/20 to-cyan-600/20 border-b border-purple-500/30 p-6">
-          <div className="flex items-center space-x-3">
-            <div className="bg-gradient-to-r from-purple-500 to-cyan-500 p-2 rounded-lg">
-              <Sparkles className="text-white" size={24} />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="bg-gradient-to-r from-purple-500 to-cyan-500 p-2 rounded-lg">
+                <Sparkles className="text-white" size={24} />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent">
+                  AuraQuestGrind Setup
+                </h1>
+                <p className="text-gray-300">Quick setup to personalize your quest experience</p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent">
-                AuraQuestGrind Setup
-              </h1>
-              <p className="text-gray-300">Your AI companion is personalizing your experience...</p>
+            <div className="text-sm text-gray-400">
+              {currentPrompt + 1} / {ONBOARDING_PROMPTS.length}
             </div>
           </div>
         </div>

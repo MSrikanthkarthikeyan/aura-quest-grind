@@ -1,4 +1,3 @@
-
 export interface AIQuestRequest {
   roles: string[];
   goals: string[];
@@ -32,6 +31,14 @@ interface UserProfile {
   timeCommitment: string;
   fitnessPreferences?: string[];
   skillLevel: string;
+}
+
+interface ProfileAnswers {
+  mainGoal?: string;
+  focusAreas?: string[];
+  dailyHours?: number;
+  questStyle?: string;
+  notes?: string;
 }
 
 const GEMINI_API_KEY = 'AIzaSyCh_5H3df-gsWXiQWbD7aG5br6FD0jE1sI';
@@ -90,6 +97,53 @@ export const generateAIQuests = async (request: AIQuestRequest): Promise<AIQuest
   } catch (error) {
     console.error('Gemini API: Error generating AI quests:', error);
     throw error;
+  }
+};
+
+export const generateProfileSummary = async (answers: ProfileAnswers): Promise<string> => {
+  console.log('Generating profile summary for:', answers);
+  
+  const prompt = `Based on the following user onboarding responses, generate a brief, encouraging 1-2 sentence summary of their personalized quest profile:
+
+Main Goal: ${answers.mainGoal}
+Focus Areas: ${answers.focusAreas?.join(', ')}
+Daily Hours: ${answers.dailyHours}
+Quest Style: ${answers.questStyle}
+Additional Notes: ${answers.notes}
+
+Write a friendly, RPG-themed summary that acknowledges their goals and shows you understand their preferences. Keep it under 150 characters and use gaming terminology like "hunter", "quests", "level up", etc.`;
+
+  try {
+    const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{
+            text: prompt
+          }]
+        }],
+        generationConfig: {
+          temperature: 0.8,
+          maxOutputTokens: 200,
+        }
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Gemini API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const summary = data.candidates[0]?.content?.parts[0]?.text;
+    
+    return summary || `Perfect! You're all set to ${answers.questStyle?.toLowerCase()} and level up in ${answers.focusAreas?.join(' and ')}.`;
+    
+  } catch (error) {
+    console.error('Error generating profile summary:', error);
+    return `Your quest profile is ready! Time to start grinding and level up in ${answers.focusAreas?.join(' and ') || 'your chosen areas'}.`;
   }
 };
 
