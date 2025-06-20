@@ -1,4 +1,3 @@
-
 import { 
   doc, 
   setDoc, 
@@ -42,8 +41,6 @@ interface OnboardingProfile {
   dailyCommitment: string;
   preferredStyle: string;
   skillLevel?: string;
-  createdAt: any;
-  lastUpdated: any;
 }
 
 export const firebaseDataService = {

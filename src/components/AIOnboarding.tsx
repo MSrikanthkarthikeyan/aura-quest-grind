@@ -195,12 +195,32 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
       
       // Add quests to the game context
       generatedQuests.forEach(quest => {
+        // Map quest frequency to expected types
+        let mappedFrequency: 'daily' | 'weekly' | 'milestone';
+        if (quest.frequency === 'Daily') {
+          mappedFrequency = 'daily';
+        } else if (quest.frequency === 'Weekly') {
+          mappedFrequency = 'weekly';
+        } else {
+          mappedFrequency = 'milestone';
+        }
+
+        // Map quest difficulty to expected types
+        let mappedDifficulty: 'basic' | 'intermediate' | 'elite';
+        if (quest.difficulty === 'Easy') {
+          mappedDifficulty = 'basic';
+        } else if (quest.difficulty === 'Hard') {
+          mappedDifficulty = 'elite';
+        } else {
+          mappedDifficulty = 'intermediate';
+        }
+
         const habitData = {
           title: quest.title,
           category: quest.category,
           xpReward: quest.xpReward,
-          frequency: quest.frequency === 'Daily' ? 'daily' : quest.frequency === 'Weekly' ? 'weekly' : 'milestone',
-          difficulty: quest.difficulty === 'Easy' ? 'basic' : quest.difficulty === 'Hard' ? 'elite' : 'intermediate',
+          frequency: mappedFrequency,
+          difficulty: mappedDifficulty,
           description: `${quest.duration} - ${quest.subtasks.join(' • ')}`,
           tier: quest.difficulty === 'Hard' ? 3 : quest.difficulty === 'Moderate' ? 2 : 1,
         };
