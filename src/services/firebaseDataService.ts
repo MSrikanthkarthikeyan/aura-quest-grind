@@ -20,7 +20,7 @@ interface FirebaseGameData {
   habits: any[];
   achievements: any[];
   userRoles: any;
-  userProfile?: any; // Add userProfile property to support AI onboarding data
+  userProfile?: any;
   dailyActivities: any[];
   lastUpdated: any;
 }
@@ -33,6 +33,17 @@ interface UserProfile {
   timeCommitment: string;
   fitnessPreferences?: string[];
   skillLevel: string;
+}
+
+interface OnboardingProfile {
+  name?: string;
+  interests: string[];
+  goal: string;
+  dailyCommitment: string;
+  preferredStyle: string;
+  skillLevel?: string;
+  createdAt: any;
+  lastUpdated: any;
 }
 
 export const firebaseDataService = {
@@ -61,6 +72,26 @@ export const firebaseDataService = {
     const userDocRef = doc(db, 'userProfiles', uid);
     await setDoc(userDocRef, {
       ...profile,
+      createdAt: serverTimestamp(),
+      lastUpdated: serverTimestamp()
+    });
+  },
+
+  // Save onboarding profile to new structure
+  async saveOnboardingProfile(uid: string, profile: OnboardingProfile) {
+    const userDocRef = doc(db, 'users', uid, 'profile', 'onboardingData');
+    await setDoc(userDocRef, {
+      ...profile,
+      createdAt: serverTimestamp(),
+      lastUpdated: serverTimestamp()
+    });
+  },
+
+  // Save generated quests
+  async saveGeneratedQuests(uid: string, quests: any[]) {
+    const questsDocRef = doc(db, 'users', uid, 'quests', 'generated');
+    await setDoc(questsDocRef, {
+      quests,
       createdAt: serverTimestamp(),
       lastUpdated: serverTimestamp()
     });
