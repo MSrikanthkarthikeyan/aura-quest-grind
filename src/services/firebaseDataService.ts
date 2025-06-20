@@ -24,6 +24,16 @@ interface FirebaseGameData {
   lastUpdated: any;
 }
 
+interface UserProfile {
+  interests: string[];
+  goals: string;
+  routine: string;
+  questStyle: string;
+  timeCommitment: string;
+  fitnessPreferences?: string[];
+  skillLevel: string;
+}
+
 export const firebaseDataService = {
   // Save user's game data
   async saveGameData(uid: string, gameData: Partial<FirebaseGameData>) {
@@ -41,6 +51,27 @@ export const firebaseDataService = {
     
     if (docSnap.exists()) {
       return docSnap.data() as FirebaseGameData;
+    }
+    return null;
+  },
+
+  // Save user profile from AI onboarding
+  async saveUserProfile(uid: string, profile: UserProfile) {
+    const userDocRef = doc(db, 'userProfiles', uid);
+    await setDoc(userDocRef, {
+      ...profile,
+      createdAt: serverTimestamp(),
+      lastUpdated: serverTimestamp()
+    });
+  },
+
+  // Get user profile
+  async getUserProfile(uid: string): Promise<UserProfile | null> {
+    const userDocRef = doc(db, 'userProfiles', uid);
+    const docSnap = await getDoc(userDocRef);
+    
+    if (docSnap.exists()) {
+      return docSnap.data() as UserProfile;
     }
     return null;
   },

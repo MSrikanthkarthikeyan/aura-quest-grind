@@ -9,18 +9,42 @@ import Achievements from '../components/Achievements';
 import SkillTree from '../components/SkillTree';
 import Sidebar from '../components/Sidebar';
 import RoleSelection from '../components/RoleSelection';
+import AIOnboarding from '../components/AIOnboarding';
 import DailyLore from '../components/DailyLore';
 import AuthModal from '../components/AuthModal';
 import { GameProvider, useGame } from '../context/GameContext';
 import { useAuth } from '../context/AuthContext';
 import { User, LogOut } from 'lucide-react';
 
+interface UserProfile {
+  interests: string[];
+  goals: string;
+  routine: string;
+  questStyle: string;
+  timeCommitment: string;
+  fitnessPreferences?: string[];
+  skillLevel: string;
+}
+
 const AppContent = () => {
   const { user, signOut, loading } = useAuth();
-  const { hasCompletedOnboarding, generateQuestsFromRoles } = useGame();
+  const { hasCompletedOnboarding, generateQuestsFromRoles, setUserRoles } = useGame();
   const [showAuthModal, setShowAuthModal] = useState(false);
 
-  const handleOnboardingComplete = () => {
+  const handleOnboardingComplete = (profile: UserProfile) => {
+    console.log('AI Onboarding completed with profile:', profile);
+    
+    // Convert AI profile to UserRoles format for compatibility
+    const userRoles = {
+      roles: profile.interests,
+      fitnessTypes: profile.fitnessPreferences || []
+    };
+    
+    setUserRoles(userRoles);
+    generateQuestsFromRoles();
+  };
+
+  const handleStaticOnboardingComplete = () => {
     generateQuestsFromRoles();
   };
 
@@ -57,7 +81,7 @@ const AppContent = () => {
   }
 
   if (!hasCompletedOnboarding) {
-    return <RoleSelection onComplete={handleOnboardingComplete} />;
+    return <AIOnboarding onComplete={handleOnboardingComplete} />;
   }
 
   return (
