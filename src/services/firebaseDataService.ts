@@ -20,6 +20,7 @@ interface FirebaseGameData {
   habits: any[];
   achievements: any[];
   userRoles: any;
+  userProfile?: any; // Add userProfile property to support AI onboarding data
   dailyActivities: any[];
   lastUpdated: any;
 }
