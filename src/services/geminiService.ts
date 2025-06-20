@@ -37,8 +37,10 @@ interface ProfileAnswers {
   mainGoal?: string;
   focusAreas?: string[];
   dailyHours?: number;
+  dailyCommitment?: string;
   questStyle?: string;
   notes?: string;
+  skillLevel?: string;
 }
 
 const GEMINI_API_KEY = 'AIzaSyCh_5H3df-gsWXiQWbD7aG5br6FD0jE1sI';
@@ -108,6 +110,7 @@ export const generateProfileSummary = async (answers: ProfileAnswers): Promise<s
 Main Goal: ${answers.mainGoal}
 Focus Areas: ${answers.focusAreas?.join(', ')}
 Daily Hours: ${answers.dailyHours}
+Daily Commitment: ${answers.dailyCommitment}
 Quest Style: ${answers.questStyle}
 Additional Notes: ${answers.notes}
 
