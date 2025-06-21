@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useGame } from '../context/GameContext';
 import { firebaseDataService } from '../services/firebaseDataService';
-import { generateOnboardingResponse, generateAIQuests } from '../services/geminiService';
+import { generateOnboardingResponse, generateAIQuests, AIQuestResponse } from '../services/geminiService';
 import { Send, Sparkles, Bot, User as UserIcon, CheckCircle, Loader2, AlertCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../hooks/use-toast';
@@ -33,6 +33,13 @@ interface ProfileAnswers {
   questStyle?: string;
   personalNote?: string;
   skillLevel?: string;
+}
+
+interface OnboardingResponse {
+  message: string;
+  extractedData?: Partial<ProfileAnswers>;
+  isComplete: boolean;
+  finalProfile?: UserProfile;
 }
 
 interface AIOnboardingProps {
@@ -92,6 +99,25 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
     console.log('Onboarding progress:', step);
   };
 
+  // Type guard function to check if response is OnboardingResponse
+  const isOnboardingResponse = (response: unknown): response is OnboardingResponse => {
+    return typeof response === 'object' && 
+           response !== null && 
+           'message' in response && 
+           'isComplete' in response;
+  };
+
+  // Type guard function to check if response is AIQuestResponse array
+  const isQuestResponseArray = (response: unknown): response is AIQuestResponse[] => {
+    return Array.isArray(response) && 
+           response.every(item => 
+             typeof item === 'object' && 
+             item !== null && 
+             'title' in item && 
+             'category' in item
+           );
+  };
+
   const handleSendMessage = async () => {
     if (!inputValue.trim() || isLoading || userInputCount >= 5) return;
 
@@ -117,13 +143,18 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
           collectedData
         );
         
-        if (response.extractedData) {
-          setCollectedData(prev => ({ ...prev, ...response.extractedData }));
-          console.log('Updated collected data:', { ...collectedData, ...response.extractedData });
+        // Type guard the response
+        if (isOnboardingResponse(response)) {
+          if (response.extractedData) {
+            setCollectedData(prev => ({ ...prev, ...response.extractedData }));
+            console.log('Updated collected data:', { ...collectedData, ...response.extractedData });
+          }
+          
+          addMessage(response.message, false);
+          setConversationHistory(newHistory + `AI: ${response.message}\n`);
+        } else {
+          throw new Error('Invalid response format from AI');
         }
-        
-        addMessage(response.message, false);
-        setConversationHistory(newHistory + `AI: ${response.message}\n`);
       }
     } catch (error) {
       console.error('Error processing response:', error);
@@ -173,14 +204,20 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
 
       console.log('Final AI response received:', finalResponse);
 
+      // Type guard and extract profile data
+      let profileData: UserProfile | undefined;
+      if (isOnboardingResponse(finalResponse) && finalResponse.finalProfile) {
+        profileData = finalResponse.finalProfile;
+      }
+
       // Step 3: Create structured onboarding profile
       const onboardingProfile = {
         name: user.displayName || 'Hunter',
-        interests: finalResponse.finalProfile?.interests || collectedData.focusAreas || ['Personal Development'],
-        goal: finalResponse.finalProfile?.goals || collectedData.mainGoal || 'Level up skills and build better habits',
-        dailyCommitment: finalResponse.finalProfile?.timeCommitment || collectedData.dailyCommitment || '1-2 hours',
-        preferredStyle: finalResponse.finalProfile?.questStyle || collectedData.questStyle || 'Solo-leveling quests',
-        skillLevel: finalResponse.finalProfile?.skillLevel || collectedData.skillLevel || 'Intermediate'
+        interests: profileData?.interests || collectedData.focusAreas || ['Personal Development'],
+        goal: profileData?.goals || collectedData.mainGoal || 'Level up skills and build better habits',
+        dailyCommitment: profileData?.timeCommitment || collectedData.dailyCommitment || '1-2 hours',
+        preferredStyle: profileData?.questStyle || collectedData.questStyle || 'Solo-leveling quests',
+        skillLevel: profileData?.skillLevel || collectedData.skillLevel || 'Intermediate'
       };
 
       console.log('Created onboarding profile:', onboardingProfile);
@@ -214,10 +251,19 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
         setTimeout(() => reject(new Error('Quest generation timeout')), 20000)
       );
       
-      const generatedQuests = await Promise.race([
+      const questResponse = await Promise.race([
         generateAIQuests(questRequest),
         questTimeoutPromise
       ]);
+      
+      // Type guard the quest response
+      let generatedQuests: AIQuestResponse[] = [];
+      if (isQuestResponseArray(questResponse)) {
+        generatedQuests = questResponse;
+      } else {
+        console.warn('Invalid quest response format, using fallback');
+        generatedQuests = [];
+      }
       
       console.log('✅ Generated', generatedQuests.length, 'quests');
       
