@@ -46,13 +46,45 @@ interface ProfileAnswers {
 const GEMINI_API_KEY = 'AIzaSyCh_5H3df-gsWXiQWbD7aG5br6FD0jE1sI';
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
 
+// Helper function to create serializable request objects
+const createSerializableRequest = (body: any) => {
+  return JSON.parse(JSON.stringify(body));
+};
+
+// Retry mechanism for API calls
+const retryApiCall = async (apiCall: () => Promise<Response>, maxRetries = 2): Promise<Response> => {
+  for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
+    try {
+      const response = await apiCall();
+      if (response.ok) {
+        return response;
+      }
+      
+      if (attempt === maxRetries + 1) {
+        throw new Error(`API call failed after ${maxRetries} retries. Status: ${response.status}`);
+      }
+      
+      console.warn(`API call attempt ${attempt} failed with status ${response.status}, retrying...`);
+      await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+    } catch (error) {
+      if (attempt === maxRetries + 1) {
+        throw error;
+      }
+      console.warn(`API call attempt ${attempt} failed:`, error);
+      await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+    }
+  }
+  throw new Error('Unexpected error in retry logic');
+};
+
 export const generateAIQuests = async (request: AIQuestRequest): Promise<AIQuestResponse[]> => {
   console.log('Gemini API: Starting quest generation with request:', request);
-  const prompt = createQuestPrompt(request);
-  console.log('Gemini API: Generated prompt:', prompt);
   
   try {
-    const requestBody = {
+    const prompt = createQuestPrompt(request);
+    console.log('Gemini API: Generated prompt length:', prompt.length);
+    
+    const requestBody = createSerializableRequest({
       contents: [{
         parts: [{
           text: prompt
@@ -62,17 +94,19 @@ export const generateAIQuests = async (request: AIQuestRequest): Promise<AIQuest
         temperature: 0.7,
         maxOutputTokens: 2048,
       }
-    };
-
-    console.log('Gemini API: Making request with body:', requestBody);
-    
-    const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(requestBody)
     });
+
+    console.log('Gemini API: Making request...');
+    
+    const response = await retryApiCall(() => 
+      fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      })
+    );
 
     console.log('Gemini API: Response status:', response.status);
 
@@ -83,10 +117,10 @@ export const generateAIQuests = async (request: AIQuestRequest): Promise<AIQuest
     }
 
     const data = await response.json();
-    console.log('Gemini API: Full response data:', data);
+    console.log('Gemini API: Response received successfully');
     
     const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    console.log('Gemini API: Generated text:', generatedText);
+    console.log('Gemini API: Generated text length:', generatedText?.length || 0);
     
     if (!generatedText) {
       console.error('Gemini API: No content generated');
@@ -94,7 +128,7 @@ export const generateAIQuests = async (request: AIQuestRequest): Promise<AIQuest
     }
 
     const parsedQuests = parseAIResponse(generatedText);
-    console.log('Gemini API: Parsed quests:', parsedQuests);
+    console.log('Gemini API: Successfully parsed', parsedQuests.length, 'quests');
     
     return parsedQuests;
   } catch (error) {
@@ -118,23 +152,27 @@ Additional Notes: ${answers.notes}
 Write a friendly, RPG-themed summary that acknowledges their goals and shows you understand their preferences. Keep it under 150 characters and use gaming terminology like "hunter", "quests", "level up", etc.`;
 
   try {
-    const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        contents: [{
-          parts: [{
-            text: prompt
-          }]
-        }],
-        generationConfig: {
-          temperature: 0.8,
-          maxOutputTokens: 200,
-        }
-      })
+    const requestBody = createSerializableRequest({
+      contents: [{
+        parts: [{
+          text: prompt
+        }]
+      }],
+      generationConfig: {
+        temperature: 0.8,
+        maxOutputTokens: 200,
+      }
     });
+
+    const response = await retryApiCall(() =>
+      fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      })
+    );
 
     if (!response.ok) {
       throw new Error(`Gemini API error: ${response.status}`);
@@ -159,13 +197,13 @@ export const generateOnboardingResponse = async (
 ): Promise<OnboardingResponse> => {
   console.log('Onboarding AI: Starting conversation generation');
   console.log('User inputs so far:', userInputCount);
-  console.log('Current data:', currentData);
+  console.log('Current data collected:', Object.keys(currentData).length, 'fields');
   console.log('Is final analysis:', isFinalAnalysis);
 
-  const prompt = createDynamicOnboardingPrompt(conversationHistory, userInputCount, currentData, isFinalAnalysis);
-  
   try {
-    const requestBody = {
+    const prompt = createDynamicOnboardingPrompt(conversationHistory, userInputCount, currentData, isFinalAnalysis);
+    
+    const requestBody = createSerializableRequest({
       contents: [{
         parts: [{
           text: prompt
@@ -175,15 +213,17 @@ export const generateOnboardingResponse = async (
         temperature: 0.8,
         maxOutputTokens: 1024,
       }
-    };
-
-    const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(requestBody)
     });
+
+    const response = await retryApiCall(() =>
+      fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      })
+    );
 
     if (!response.ok) {
       throw new Error(`Gemini API error: ${response.status}`);
@@ -208,27 +248,27 @@ const getFallbackQuests = (): AIQuestResponse[] => {
   console.log('Using fallback quests due to API failure');
   return [
     {
-      title: 'Morning Code Quest',
+      title: 'Shadow Code Training',
       duration: '30 minutes',
-      subtasks: ['Review yesterday\'s code', 'Write 20 lines of clean code', 'Test functionality'],
+      subtasks: ['Review yesterday\'s progress', 'Write clean, focused code', 'Test and debug thoroughly'],
       difficulty: 'Moderate',
       frequency: 'Daily',
       category: 'Tech',
       xpReward: 45,
     },
     {
-      title: 'Skill Building Challenge',
+      title: 'Skill Mastery Quest',
       duration: '45 minutes',
-      subtasks: ['Read documentation', 'Practice new concept', 'Build small example'],
+      subtasks: ['Study new concepts', 'Practice implementation', 'Build something useful'],
       difficulty: 'Moderate',
       frequency: 'Daily',
       category: 'Personal',
       xpReward: 50,
     },
     {
-      title: 'Weekly Progress Review',
+      title: 'Weekly Reflection Ritual',
       duration: '1 hour',
-      subtasks: ['Review weekly goals', 'Assess progress', 'Plan next week'],
+      subtasks: ['Review weekly achievements', 'Assess progress toward goals', 'Plan upcoming challenges'],
       difficulty: 'Easy',
       frequency: 'Weekly',
       category: 'Personal',
@@ -437,7 +477,7 @@ const getFallbackResponse = (
 };
 
 const parseAIResponse = (response: string): AIQuestResponse[] => {
-  console.log('Parsing AI response:', response);
+  console.log('Parsing AI response length:', response.length);
   
   try {
     // Clean the response to extract JSON
@@ -448,10 +488,10 @@ const parseAIResponse = (response: string): AIQuestResponse[] => {
     }
     
     const cleanedResponse = jsonMatch[0];
-    console.log('Extracted JSON:', cleanedResponse);
+    console.log('Extracted JSON length:', cleanedResponse.length);
     
     const quests = JSON.parse(cleanedResponse);
-    console.log('Parsed JSON quests:', quests);
+    console.log('Parsed', quests.length, 'quests from AI');
     
     const mappedQuests = quests.map((quest: any) => ({
       title: quest.title || 'Generated Quest',
@@ -463,7 +503,7 @@ const parseAIResponse = (response: string): AIQuestResponse[] => {
       xpReward: quest.xpReward || 35,
     }));
     
-    console.log('Final mapped quests:', mappedQuests);
+    console.log('Final mapped quests count:', mappedQuests.length);
     return mappedQuests;
   } catch (error) {
     console.error('Error parsing AI response:', error);

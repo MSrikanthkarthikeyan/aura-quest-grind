@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useGame } from '../context/GameContext';
 import { firebaseDataService } from '../services/firebaseDataService';
 import { generateOnboardingResponse, generateAIQuests } from '../services/geminiService';
-import { Send, Sparkles, Bot, User as UserIcon, CheckCircle, Loader2 } from 'lucide-react';
+import { Send, Sparkles, Bot, User as UserIcon, CheckCircle, Loader2, AlertCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../hooks/use-toast';
 
@@ -13,6 +13,7 @@ interface Message {
   text: string;
   isUser: boolean;
   timestamp: Date;
+  isError?: boolean;
 }
 
 interface UserProfile {
@@ -50,6 +51,8 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
   const [userInputCount, setUserInputCount] = useState(0);
   const [collectedData, setCollectedData] = useState<ProfileAnswers>({});
   const [conversationHistory, setConversationHistory] = useState<string>('');
+  const [hasError, setHasError] = useState(false);
+  const [completionProgress, setCompletionProgress] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -72,17 +75,27 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
     setConversationHistory('AI: ' + welcomeMessage.text + '\n');
   }, []);
 
+  const addMessage = (text: string, isUser: boolean, isError: boolean = false) => {
+    const newMessage: Message = {
+      id: Date.now().toString(),
+      text,
+      isUser,
+      timestamp: new Date(),
+      isError
+    };
+    setMessages(prev => [...prev, newMessage]);
+    return newMessage;
+  };
+
+  const updateProgress = (step: string) => {
+    setCompletionProgress(step);
+    console.log('Onboarding progress:', step);
+  };
+
   const handleSendMessage = async () => {
     if (!inputValue.trim() || isLoading || userInputCount >= 5) return;
 
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      text: inputValue,
-      isUser: true,
-      timestamp: new Date()
-    };
-
-    setMessages(prev => [...prev, userMessage]);
+    const userMessage = addMessage(inputValue, true);
     
     const newHistory = conversationHistory + `User: ${inputValue}\n`;
     setConversationHistory(newHistory);
@@ -92,6 +105,7 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
     
     setInputValue('');
     setIsLoading(true);
+    setHasError(false);
 
     try {
       if (newInputCount >= 5) {
@@ -105,31 +119,21 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
         
         if (response.extractedData) {
           setCollectedData(prev => ({ ...prev, ...response.extractedData }));
+          console.log('Updated collected data:', { ...collectedData, ...response.extractedData });
         }
         
-        const aiMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          text: response.message,
-          isUser: false,
-          timestamp: new Date()
-        };
-        
-        setMessages(prev => [...prev, aiMessage]);
+        addMessage(response.message, false);
         setConversationHistory(newHistory + `AI: ${response.message}\n`);
       }
     } catch (error) {
       console.error('Error processing response:', error);
+      setHasError(true);
       
-      const fallbackMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        text: newInputCount >= 5 
-          ? "🎉 Perfect! Let me set up your personalized quest profile and generate your first quests!"
-          : "That's great! Tell me more about what you'd like to focus on.",
-        isUser: false,
-        timestamp: new Date()
-      };
+      const fallbackMessage = newInputCount >= 5 
+        ? "🎉 Perfect! Let me set up your personalized quest profile and generate your first quests!"
+        : "That's great! Tell me more about what you'd like to focus on.";
       
-      setMessages(prev => [...prev, fallbackMessage]);
+      addMessage(fallbackMessage, false);
       
       if (newInputCount >= 5) {
         setTimeout(() => completeOnboardingFlow(newHistory), 2000);
@@ -142,34 +146,34 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
   const completeOnboardingFlow = async (finalHistory: string) => {
     if (!user) {
       console.error('No user found during onboarding completion');
+      addMessage("❌ Error: No user session found. Please refresh and try again.", false, true);
       return;
     }
 
     setIsCompleting(true);
+    setHasError(false);
     
     try {
-      console.log('Starting onboarding completion flow...');
+      console.log('=== Starting onboarding completion flow ===');
+      updateProgress('Analyzing your responses...');
       
       // Step 1: Show completion message
-      const completionMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        text: "🎉 Perfect! Now let me finalize your profile and generate your first personalized quests...",
-        isUser: false,
-        timestamp: new Date()
-      };
-      setMessages(prev => [...prev, completionMessage]);
+      addMessage("🎉 Perfect! Now let me finalize your profile and generate your first personalized quests...", false);
 
-      // Step 2: Get final AI analysis and create structured profile
-      const finalResponse = await generateOnboardingResponse(
-        finalHistory,
-        5,
-        collectedData,
-        true
+      // Step 2: Get final AI analysis with timeout
+      updateProgress('Creating your profile...');
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('AI analysis timeout')), 15000)
       );
+      
+      const finalResponse = await Promise.race([
+        generateOnboardingResponse(finalHistory, 5, collectedData, true),
+        timeoutPromise
+      ]);
 
-      console.log('Final AI response:', finalResponse);
+      console.log('Final AI response received:', finalResponse);
 
-      // Create structured onboarding profile
+      // Step 3: Create structured onboarding profile
       const onboardingProfile = {
         name: user.displayName || 'Hunter',
         interests: finalResponse.finalProfile?.interests || collectedData.focusAreas || ['Personal Development'],
@@ -181,11 +185,17 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
 
       console.log('Created onboarding profile:', onboardingProfile);
 
-      // Step 3: Save onboarding profile to Firebase
-      await firebaseDataService.saveOnboardingProfile(user.uid, onboardingProfile);
-      console.log('Saved onboarding profile to Firebase');
+      // Step 4: Save onboarding profile to Firebase
+      updateProgress('Saving your profile...');
+      try {
+        await firebaseDataService.saveOnboardingProfile(user.uid, onboardingProfile);
+        console.log('✅ Saved onboarding profile to Firebase');
+      } catch (error) {
+        console.warn('⚠️ Failed to save onboarding profile, continuing with quest generation:', error);
+      }
       
-      // Step 4: Generate personalized quests using AI
+      // Step 5: Generate personalized quests using AI
+      updateProgress('Generating your personalized quests...');
       const questRequest = {
         roles: onboardingProfile.interests,
         goals: [onboardingProfile.goal],
@@ -199,14 +209,29 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
       };
 
       console.log('Generating personalized quests with:', questRequest);
-      const generatedQuests = await generateAIQuests(questRequest);
-      console.log('Generated quests:', generatedQuests);
       
-      // Step 5: Save quests to Firebase and add to game state
-      await firebaseDataService.saveGeneratedQuests(user.uid, generatedQuests);
-      console.log('Saved quests to Firebase');
+      const questTimeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Quest generation timeout')), 20000)
+      );
       
-      // Add quests to the game context
+      const generatedQuests = await Promise.race([
+        generateAIQuests(questRequest),
+        questTimeoutPromise
+      ]);
+      
+      console.log('✅ Generated', generatedQuests.length, 'quests');
+      
+      // Step 6: Save quests to Firebase
+      updateProgress('Saving your quests...');
+      try {
+        await firebaseDataService.saveGeneratedQuests(user.uid, generatedQuests);
+        console.log('✅ Saved quests to Firebase');
+      } catch (error) {
+        console.warn('⚠️ Failed to save quests to Firebase, continuing with quest addition:', error);
+      }
+      
+      // Step 7: Add quests to game context
+      updateProgress('Setting up your quest board...');
       let questsAdded = 0;
       generatedQuests.forEach(quest => {
         try {
@@ -242,24 +267,19 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
           
           addHabit(habitData);
           questsAdded++;
-          console.log(`Added quest ${questsAdded}:`, habitData.title);
+          console.log(`✅ Added quest ${questsAdded}:`, habitData.title);
         } catch (error) {
-          console.error('Error adding quest to game:', error);
+          console.error('❌ Error adding quest to game:', error);
         }
       });
 
-      console.log(`Successfully added ${questsAdded} quests to game context`);
+      console.log(`✅ Successfully added ${questsAdded} out of ${generatedQuests.length} quests to game context`);
 
-      // Step 6: Show success message
-      const successMessage: Message = {
-        id: (Date.now() + 2).toString(),
-        text: `🗡️ All set, ${onboardingProfile.name}! I've crafted ${generatedQuests.length} personalized quests based on your ${onboardingProfile.goal.toLowerCase()}. Your solo leveling journey begins now!`,
-        isUser: false,
-        timestamp: new Date()
-      };
-      setMessages(prev => [...prev, successMessage]);
+      // Step 8: Show success message
+      updateProgress('Finalizing your adventure...');
+      addMessage(`🗡️ All set, ${onboardingProfile.name}! I've crafted ${generatedQuests.length} personalized quests based on your ${onboardingProfile.goal.toLowerCase()}. Your solo leveling journey begins now!`, false);
 
-      // Step 7: Complete onboarding and redirect
+      // Step 9: Complete onboarding and redirect
       const profile: UserProfile = {
         interests: onboardingProfile.interests,
         goals: onboardingProfile.goal,
@@ -270,37 +290,36 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
         skillLevel: onboardingProfile.skillLevel
       };
 
-      await firebaseDataService.saveUserProfile(user.uid, profile);
-      console.log('Saved user profile to Firebase');
+      try {
+        await firebaseDataService.saveUserProfile(user.uid, profile);
+        console.log('✅ Saved user profile to Firebase');
+      } catch (error) {
+        console.warn('⚠️ Failed to save user profile, continuing with completion:', error);
+      }
       
       // Show success toast
       toast({
         title: "🎉 Welcome to AuraQuestGrind!",
-        description: `Your personalized quests are ready. Time to level up!`,
+        description: `Your ${generatedQuests.length} personalized quests are ready. Time to level up!`,
       });
 
-      console.log('Completing onboarding and redirecting...');
+      console.log('✅ Onboarding completed successfully, redirecting...');
       
       // Call onComplete callback
       onComplete(profile);
       
       // Redirect after short delay
       setTimeout(() => {
-        console.log('Navigating to /habits...');
+        console.log('🚀 Navigating to /habits...');
         navigate('/habits');
       }, 2000);
 
     } catch (error) {
-      console.error('Error completing onboarding flow:', error);
+      console.error('❌ Error completing onboarding flow:', error);
+      setHasError(true);
       
       // Fallback completion
-      const errorMessage: Message = {
-        id: (Date.now() + 3).toString(),
-        text: "⚠️ Something went wrong, but don't worry! I'll set up a basic profile for you and you can customize it later.",
-        isUser: false,
-        timestamp: new Date()
-      };
-      setMessages(prev => [...prev, errorMessage]);
+      addMessage("⚠️ Something went wrong, but don't worry! I'll set up a basic profile for you and you can customize it later.", false, true);
 
       // Create fallback profile
       const fallbackProfile: UserProfile = {
@@ -316,6 +335,7 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
       toast({
         title: "Profile Created",
         description: "Basic setup complete. You can customize your quests anytime!",
+        variant: "default",
       });
       
       onComplete(fallbackProfile);
@@ -325,6 +345,7 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
       }, 2000);
     } finally {
       setIsCompleting(false);
+      setCompletionProgress('');
     }
   };
 
@@ -343,14 +364,20 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <div className="bg-gradient-to-r from-purple-500 to-cyan-500 p-2 rounded-lg">
-                {isCompleting ? <Loader2 className="text-white animate-spin" size={24} /> : <Sparkles className="text-white" size={24} />}
+                {isCompleting ? (
+                  <Loader2 className="text-white animate-spin" size={24} />
+                ) : hasError ? (
+                  <AlertCircle className="text-red-400" size={24} />
+                ) : (
+                  <Sparkles className="text-white" size={24} />
+                )}
               </div>
               <div>
                 <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent">
                   {isCompleting ? 'Setting Up Your Quest Profile' : 'AuraQuestGrind Setup'}
                 </h1>
                 <p className="text-gray-300">
-                  {isCompleting ? 'Generating personalized quests...' : 'AI-powered personalization (max 5 questions)'}
+                  {isCompleting ? completionProgress || 'Generating personalized quests...' : 'AI-powered personalization (max 5 questions)'}
                 </p>
               </div>
             </div>
@@ -378,13 +405,17 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
                   message.isUser 
                     ? 'bg-gradient-to-r from-cyan-500 to-purple-500' 
+                    : message.isError
+                    ? 'bg-red-500'
                     : 'bg-gradient-to-r from-purple-500 to-pink-500'
                 }`}>
-                  {message.isUser ? <UserIcon size={16} /> : <Bot size={16} />}
+                  {message.isUser ? <UserIcon size={16} /> : message.isError ? <AlertCircle size={16} /> : <Bot size={16} />}
                 </div>
                 <div className={`p-3 rounded-lg ${
                   message.isUser 
                     ? 'bg-gradient-to-r from-cyan-600/20 to-purple-600/20 border border-cyan-500/30' 
+                    : message.isError
+                    ? 'bg-red-900/20 border border-red-500/30'
                     : 'bg-gray-800/50 border border-gray-700/50'
                 }`}>
                   <p className="text-white whitespace-pre-wrap">{message.text}</p>
@@ -435,6 +466,12 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
               <Send size={20} />
             </button>
           </div>
+          {hasError && (
+            <p className="text-red-400 text-sm mt-2 flex items-center space-x-1">
+              <AlertCircle size={14} />
+              <span>Some features may be limited due to connection issues, but your profile will still be created.</span>
+            </p>
+          )}
         </div>
       </div>
     </div>

@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { Routes, Route } from 'react-router-dom';
 import Dashboard from '../components/Dashboard';
 import QuestBoard from '../components/QuestBoard';
 import PomodoroTimer from '../components/PomodoroTimer';
@@ -12,7 +12,7 @@ import RoleSelection from '../components/RoleSelection';
 import AIOnboarding from '../components/AIOnboarding';
 import DailyLore from '../components/DailyLore';
 import AuthModal from '../components/AuthModal';
-import { GameProvider, useGame } from '../context/GameContext';
+import { useGame } from '../context/GameContext';
 import { useAuth } from '../context/AuthContext';
 import { User, LogOut } from 'lucide-react';
 
@@ -26,7 +26,7 @@ interface UserProfile {
   skillLevel: string;
 }
 
-const AppContent = () => {
+const Index = () => {
   const { user, signOut, loading } = useAuth();
   const { hasCompletedOnboarding, generateQuestsFromRoles, setUserRoles } = useGame();
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -114,14 +114,6 @@ const AppContent = () => {
         </main>
       </div>
     </div>
-  );
-};
-
-const Index = () => {
-  return (
-    <GameProvider>
-      <AppContent />
-    </GameProvider>
   );
 };
 
