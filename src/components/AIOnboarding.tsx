@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useGame } from '../context/GameContext';
@@ -69,7 +70,7 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
     };
     setMessages([welcomeMessage]);
     setConversationHistory('AI: ' + welcomeMessage.text + '\n');
-  }, [user]);
+  }, []);
 
   const handleSendMessage = async () => {
     if (!inputValue.trim() || isLoading || userInputCount >= 5) return;
@@ -115,7 +116,6 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
         
         setMessages(prev => [...prev, aiMessage]);
         setConversationHistory(newHistory + `AI: ${response.message}\n`);
-        setIsLoading(false);
       }
     } catch (error) {
       console.error('Error processing response:', error);
@@ -130,20 +130,26 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
       };
       
       setMessages(prev => [...prev, fallbackMessage]);
-      setIsLoading(false);
       
       if (newInputCount >= 5) {
         setTimeout(() => completeOnboardingFlow(newHistory), 2000);
       }
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const completeOnboardingFlow = async (finalHistory: string) => {
-    if (!user) return;
+    if (!user) {
+      console.error('No user found during onboarding completion');
+      return;
+    }
 
     setIsCompleting(true);
     
     try {
+      console.log('Starting onboarding completion flow...');
+      
       // Step 1: Show completion message
       const completionMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -161,6 +167,8 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
         true
       );
 
+      console.log('Final AI response:', finalResponse);
+
       // Create structured onboarding profile
       const onboardingProfile = {
         name: user.displayName || 'Hunter',
@@ -171,8 +179,11 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
         skillLevel: finalResponse.finalProfile?.skillLevel || collectedData.skillLevel || 'Intermediate'
       };
 
+      console.log('Created onboarding profile:', onboardingProfile);
+
       // Step 3: Save onboarding profile to Firebase
       await firebaseDataService.saveOnboardingProfile(user.uid, onboardingProfile);
+      console.log('Saved onboarding profile to Firebase');
       
       // Step 4: Generate personalized quests using AI
       const questRequest = {
@@ -189,43 +200,55 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
 
       console.log('Generating personalized quests with:', questRequest);
       const generatedQuests = await generateAIQuests(questRequest);
+      console.log('Generated quests:', generatedQuests);
       
       // Step 5: Save quests to Firebase and add to game state
       await firebaseDataService.saveGeneratedQuests(user.uid, generatedQuests);
+      console.log('Saved quests to Firebase');
       
       // Add quests to the game context
+      let questsAdded = 0;
       generatedQuests.forEach(quest => {
-        // Map quest frequency to expected types
-        let mappedFrequency: 'daily' | 'weekly' | 'milestone';
-        if (quest.frequency === 'Daily') {
-          mappedFrequency = 'daily';
-        } else if (quest.frequency === 'Weekly') {
-          mappedFrequency = 'weekly';
-        } else {
-          mappedFrequency = 'milestone';
-        }
+        try {
+          // Map quest frequency to expected types
+          let mappedFrequency: 'daily' | 'weekly' | 'milestone';
+          if (quest.frequency === 'Daily') {
+            mappedFrequency = 'daily';
+          } else if (quest.frequency === 'Weekly') {
+            mappedFrequency = 'weekly';
+          } else {
+            mappedFrequency = 'milestone';
+          }
 
-        // Map quest difficulty to expected types
-        let mappedDifficulty: 'basic' | 'intermediate' | 'elite';
-        if (quest.difficulty === 'Easy') {
-          mappedDifficulty = 'basic';
-        } else if (quest.difficulty === 'Hard') {
-          mappedDifficulty = 'elite';
-        } else {
-          mappedDifficulty = 'intermediate';
-        }
+          // Map quest difficulty to expected types
+          let mappedDifficulty: 'basic' | 'intermediate' | 'elite';
+          if (quest.difficulty === 'Easy') {
+            mappedDifficulty = 'basic';
+          } else if (quest.difficulty === 'Hard') {
+            mappedDifficulty = 'elite';
+          } else {
+            mappedDifficulty = 'intermediate';
+          }
 
-        const habitData = {
-          title: quest.title,
-          category: quest.category,
-          xpReward: quest.xpReward,
-          frequency: mappedFrequency,
-          difficulty: mappedDifficulty,
-          description: `${quest.duration} - ${quest.subtasks.join(' • ')}`,
-          tier: quest.difficulty === 'Hard' ? 3 : quest.difficulty === 'Moderate' ? 2 : 1,
-        };
-        addHabit(habitData);
+          const habitData = {
+            title: quest.title,
+            category: quest.category,
+            xpReward: quest.xpReward,
+            frequency: mappedFrequency,
+            difficulty: mappedDifficulty,
+            description: `${quest.duration} - ${quest.subtasks.join(' • ')}`,
+            tier: quest.difficulty === 'Hard' ? 3 : quest.difficulty === 'Moderate' ? 2 : 1,
+          };
+          
+          addHabit(habitData);
+          questsAdded++;
+          console.log(`Added quest ${questsAdded}:`, habitData.title);
+        } catch (error) {
+          console.error('Error adding quest to game:', error);
+        }
       });
+
+      console.log(`Successfully added ${questsAdded} quests to game context`);
 
       // Step 6: Show success message
       const successMessage: Message = {
@@ -248,6 +271,7 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
       };
 
       await firebaseDataService.saveUserProfile(user.uid, profile);
+      console.log('Saved user profile to Firebase');
       
       // Show success toast
       toast({
@@ -255,9 +279,14 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
         description: `Your personalized quests are ready. Time to level up!`,
       });
 
+      console.log('Completing onboarding and redirecting...');
+      
+      // Call onComplete callback
+      onComplete(profile);
+      
       // Redirect after short delay
       setTimeout(() => {
-        onComplete(profile);
+        console.log('Navigating to /habits...');
         navigate('/habits');
       }, 2000);
 
@@ -289,8 +318,9 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
         description: "Basic setup complete. You can customize your quests anytime!",
       });
       
+      onComplete(fallbackProfile);
+      
       setTimeout(() => {
-        onComplete(fallbackProfile);
         navigate('/habits');
       }, 2000);
     } finally {
