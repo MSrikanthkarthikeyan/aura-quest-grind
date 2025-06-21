@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { questTemplates, getQuestsForRoles, QuestTemplate } from '../utils/questTemplates';
 import { useAuth } from './AuthContext';
 import { firebaseDataService } from '../services/firebaseDataService';
@@ -148,15 +148,42 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return saved ? JSON.parse(saved) : [];
   });
 
-  // Firebase sync effect
+  // Add sync control states
+  const [isSyncEnabled, setIsSyncEnabled] = useState(true);
+  const syncTimeoutRef = useRef<NodeJS.Timeout>();
+  const lastSyncDataRef = useRef<string>('');
+
+  // Debounced sync function
+  const debouncedSync = (data: any) => {
+    const dataString = JSON.stringify(data);
+    if (dataString === lastSyncDataRef.current) {
+      return; // No changes, skip sync
+    }
+    lastSyncDataRef.current = dataString;
+
+    if (syncTimeoutRef.current) {
+      clearTimeout(syncTimeoutRef.current);
+    }
+
+    syncTimeoutRef.current = setTimeout(() => {
+      if (isSyncEnabled && user) {
+        syncToFirebase();
+      }
+    }, 1000);
+  };
+
+  // Firebase sync effect - only when sync is enabled
   useEffect(() => {
-    if (user) {
+    if (user && isSyncEnabled) {
+      console.log('Setting up Firebase sync for user:', user.uid);
+      
       // Load data from Firebase when user logs in
       loadFromFirebase();
       
       // Set up real-time listener
       const unsubscribe = firebaseDataService.subscribeToGameData(user.uid, (data) => {
-        if (data) {
+        if (data && isSyncEnabled) {
+          console.log('Received Firebase update, applying changes...');
           if (data.character) setCharacter(data.character);
           if (data.habits) setHabits(data.habits);
           if (data.achievements) setAchievements(data.achievements);
@@ -168,9 +195,12 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       });
 
-      return () => unsubscribe();
+      return () => {
+        console.log('Cleaning up Firebase sync');
+        unsubscribe();
+      };
     }
-  }, [user]);
+  }, [user, isSyncEnabled]);
 
   const loadFromFirebase = async () => {
     if (!user) return;
@@ -193,9 +223,10 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const syncToFirebase = async () => {
-    if (!user) return;
+    if (!user || !isSyncEnabled) return;
 
     try {
+      console.log('Syncing to Firebase...');
       await firebaseDataService.saveGameData(user.uid, {
         character,
         habits,
@@ -203,17 +234,18 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         userRoles,
         dailyActivities
       });
+      console.log('Firebase sync completed');
     } catch (error) {
       console.error('Error syncing to Firebase:', error);
     }
   };
 
-  // Auto-sync when data changes
+  // Modified auto-sync with debouncing - only when sync is enabled
   useEffect(() => {
-    if (user) {
-      syncToFirebase();
+    if (user && isSyncEnabled) {
+      debouncedSync({ character, habits, achievements, userRoles, dailyActivities });
     }
-  }, [character, habits, achievements, userRoles, dailyActivities, user]);
+  }, [character, habits, achievements, userRoles, dailyActivities, user, isSyncEnabled]);
 
   // Save to localStorage whenever state changes
   useEffect(() => {
@@ -304,10 +336,23 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const setUserRoles = (roles: UserRoles) => {
+    console.log('Setting user roles and completing onboarding:', roles);
+    
+    // Temporarily disable sync to prevent loops during onboarding
+    setIsSyncEnabled(false);
+    
     setUserRolesState(roles);
     setHasCompletedOnboarding(true);
     localStorage.setItem('hasCompletedOnboarding', 'true');
+    localStorage.setItem('userRoles', JSON.stringify(roles));
+    
     generateQuestsFromRoles(roles);
+    
+    // Re-enable sync after onboarding
+    setTimeout(() => {
+      console.log('Re-enabling Firebase sync after onboarding');
+      setIsSyncEnabled(true);
+    }, 2000);
   };
 
   const generateQuestsFromRoles = (roles?: UserRoles) => {

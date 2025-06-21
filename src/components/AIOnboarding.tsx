@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useGame } from '../context/GameContext';
@@ -51,6 +50,7 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
   const { addHabit } = useGame();
   const navigate = useNavigate();
   const { toast } = useToast();
+  
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -60,6 +60,8 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
   const [conversationHistory, setConversationHistory] = useState<string>('');
   const [hasError, setHasError] = useState(false);
   const [completionProgress, setCompletionProgress] = useState('');
+  const [retryCount, setRetryCount] = useState(0);
+  const [isRetrying, setIsRetrying] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -121,6 +123,10 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
   const handleSendMessage = async () => {
     if (!inputValue.trim() || isLoading || userInputCount >= 5) return;
 
+    console.log('=== Handling user message ===');
+    console.log('Input count:', userInputCount + 1);
+    console.log('User input:', inputValue);
+
     const userMessage = addMessage(inputValue, true);
     
     const newHistory = conversationHistory + `User: ${inputValue}\n`;
@@ -135,8 +141,10 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
 
     try {
       if (newInputCount >= 5) {
+        console.log('=== Triggering completion flow ===');
         await completeOnboardingFlow(newHistory);
       } else {
+        console.log('=== Continuing conversation ===');
         const response = await generateOnboardingResponse(
           newHistory,
           newInputCount,
@@ -181,218 +189,285 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
       return;
     }
 
+    console.log('=== Starting onboarding completion flow ===');
     setIsCompleting(true);
     setHasError(false);
+    setRetryCount(0);
     
     try {
-      console.log('=== Starting onboarding completion flow ===');
-      updateProgress('Analyzing your responses...');
-      
-      // Step 1: Show completion message
-      addMessage("🎉 Perfect! Now let me finalize your profile and generate your first personalized quests...", false);
-
-      // Step 2: Get final AI analysis with timeout
-      updateProgress('Creating your profile...');
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('AI analysis timeout')), 15000)
-      );
-      
-      const finalResponse = await Promise.race([
-        generateOnboardingResponse(finalHistory, 5, collectedData, true),
-        timeoutPromise
-      ]);
-
-      console.log('Final AI response received:', finalResponse);
-
-      // Type guard and extract profile data
-      let profileData: UserProfile | undefined;
-      if (isOnboardingResponse(finalResponse) && finalResponse.finalProfile) {
-        profileData = finalResponse.finalProfile;
-      }
-
-      // Step 3: Create structured onboarding profile
-      const onboardingProfile = {
-        name: user.displayName || 'Hunter',
-        interests: profileData?.interests || collectedData.focusAreas || ['Personal Development'],
-        goal: profileData?.goals || collectedData.mainGoal || 'Level up skills and build better habits',
-        dailyCommitment: profileData?.timeCommitment || collectedData.dailyCommitment || '1-2 hours',
-        preferredStyle: profileData?.questStyle || collectedData.questStyle || 'Solo-leveling quests',
-        skillLevel: profileData?.skillLevel || collectedData.skillLevel || 'Intermediate'
-      };
-
-      console.log('Created onboarding profile:', onboardingProfile);
-
-      // Step 4: Save onboarding profile to Firebase
-      updateProgress('Saving your profile...');
-      try {
-        await firebaseDataService.saveOnboardingProfile(user.uid, onboardingProfile);
-        console.log('✅ Saved onboarding profile to Firebase');
-      } catch (error) {
-        console.warn('⚠️ Failed to save onboarding profile, continuing with quest generation:', error);
-      }
-      
-      // Step 5: Generate personalized quests using AI
-      updateProgress('Generating your personalized quests...');
-      const questRequest = {
-        roles: onboardingProfile.interests,
-        goals: [onboardingProfile.goal],
-        skillLevel: onboardingProfile.skillLevel as 'Beginner' | 'Intermediate' | 'Advanced',
-        timeCommitment: onboardingProfile.dailyCommitment,
-        fitnessTypes: onboardingProfile.interests.filter(interest => 
-          interest.toLowerCase().includes('fitness') || 
-          interest.toLowerCase().includes('health') ||
-          interest.toLowerCase().includes('workout')
-        )
-      };
-
-      console.log('Generating personalized quests with:', questRequest);
-      
-      const questTimeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Quest generation timeout')), 20000)
-      );
-      
-      const questResponse = await Promise.race([
-        generateAIQuests(questRequest),
-        questTimeoutPromise
-      ]);
-      
-      // Type guard the quest response
-      let generatedQuests: AIQuestResponse[] = [];
-      if (isQuestResponseArray(questResponse)) {
-        generatedQuests = questResponse;
-      } else {
-        console.warn('Invalid quest response format, using fallback');
-        generatedQuests = [];
-      }
-      
-      console.log('✅ Generated', generatedQuests.length, 'quests');
-      
-      // Step 6: Save quests to Firebase
-      updateProgress('Saving your quests...');
-      try {
-        await firebaseDataService.saveGeneratedQuests(user.uid, generatedQuests);
-        console.log('✅ Saved quests to Firebase');
-      } catch (error) {
-        console.warn('⚠️ Failed to save quests to Firebase, continuing with quest addition:', error);
-      }
-      
-      // Step 7: Add quests to game context
-      updateProgress('Setting up your quest board...');
-      let questsAdded = 0;
-      generatedQuests.forEach(quest => {
-        try {
-          // Map quest frequency to expected types
-          let mappedFrequency: 'daily' | 'weekly' | 'milestone';
-          if (quest.frequency === 'Daily') {
-            mappedFrequency = 'daily';
-          } else if (quest.frequency === 'Weekly') {
-            mappedFrequency = 'weekly';
-          } else {
-            mappedFrequency = 'milestone';
-          }
-
-          // Map quest difficulty to expected types
-          let mappedDifficulty: 'basic' | 'intermediate' | 'elite';
-          if (quest.difficulty === 'Easy') {
-            mappedDifficulty = 'basic';
-          } else if (quest.difficulty === 'Hard') {
-            mappedDifficulty = 'elite';
-          } else {
-            mappedDifficulty = 'intermediate';
-          }
-
-          const habitData = {
-            title: quest.title,
-            category: quest.category,
-            xpReward: quest.xpReward,
-            frequency: mappedFrequency,
-            difficulty: mappedDifficulty,
-            description: `${quest.duration} - ${quest.subtasks.join(' • ')}`,
-            tier: quest.difficulty === 'Hard' ? 3 : quest.difficulty === 'Moderate' ? 2 : 1,
-          };
-          
-          addHabit(habitData);
-          questsAdded++;
-          console.log(`✅ Added quest ${questsAdded}:`, habitData.title);
-        } catch (error) {
-          console.error('❌ Error adding quest to game:', error);
-        }
-      });
-
-      console.log(`✅ Successfully added ${questsAdded} out of ${generatedQuests.length} quests to game context`);
-
-      // Step 8: Show success message
-      updateProgress('Finalizing your adventure...');
-      addMessage(`🗡️ All set, ${onboardingProfile.name}! I've crafted ${generatedQuests.length} personalized quests based on your ${onboardingProfile.goal.toLowerCase()}. Your solo leveling journey begins now!`, false);
-
-      // Step 9: Complete onboarding and redirect
-      const profile: UserProfile = {
-        interests: onboardingProfile.interests,
-        goals: onboardingProfile.goal,
-        routine: onboardingProfile.dailyCommitment,
-        questStyle: onboardingProfile.preferredStyle,
-        timeCommitment: onboardingProfile.dailyCommitment,
-        fitnessPreferences: questRequest.fitnessTypes,
-        skillLevel: onboardingProfile.skillLevel
-      };
-
-      try {
-        await firebaseDataService.saveUserProfile(user.uid, profile);
-        console.log('✅ Saved user profile to Firebase');
-      } catch (error) {
-        console.warn('⚠️ Failed to save user profile, continuing with completion:', error);
-      }
-      
-      // Show success toast
-      toast({
-        title: "🎉 Welcome to AuraQuestGrind!",
-        description: `Your ${generatedQuests.length} personalized quests are ready. Time to level up!`,
-      });
-
-      console.log('✅ Onboarding completed successfully, redirecting...');
-      
-      // Call onComplete callback
-      onComplete(profile);
-      
-      // Redirect after short delay
-      setTimeout(() => {
-        console.log('🚀 Navigating to /habits...');
-        navigate('/habits');
-      }, 2000);
-
+      await executeCompletionSteps(finalHistory);
     } catch (error) {
-      console.error('❌ Error completing onboarding flow:', error);
-      setHasError(true);
-      
-      // Fallback completion
-      addMessage("⚠️ Something went wrong, but don't worry! I'll set up a basic profile for you and you can customize it later.", false, true);
-
-      // Create fallback profile
-      const fallbackProfile: UserProfile = {
-        interests: collectedData.focusAreas || ['Personal Development'],
-        goals: collectedData.mainGoal || 'Improve productivity',
-        routine: collectedData.dailyCommitment || '1-2 hours daily',
-        questStyle: collectedData.questStyle || 'Flexible missions',
-        timeCommitment: collectedData.dailyCommitment || '1-2 hours daily',
-        fitnessPreferences: [],
-        skillLevel: collectedData.skillLevel || 'Intermediate'
-      };
-
-      toast({
-        title: "Profile Created",
-        description: "Basic setup complete. You can customize your quests anytime!",
-        variant: "default",
-      });
-      
-      onComplete(fallbackProfile);
-      
-      setTimeout(() => {
-        navigate('/habits');
-      }, 2000);
+      console.error('❌ Critical error in completion flow:', error);
+      await handleCompletionError(finalHistory);
     } finally {
       setIsCompleting(false);
       setCompletionProgress('');
     }
+  };
+
+  const executeCompletionSteps = async (finalHistory: string) => {
+    updateProgress('Analyzing your responses...');
+    
+    // Step 1: Show completion message
+    addMessage("🎉 Perfect! Now let me finalize your profile and generate your first personalized quests...", false);
+
+    // Step 2: Create onboarding profile with fallbacks
+    const onboardingProfile = {
+      name: user?.displayName || 'Hunter',
+      interests: collectedData.focusAreas || ['Personal Development'],
+      goal: collectedData.mainGoal || 'Level up skills and build better habits',
+      dailyCommitment: collectedData.dailyCommitment || '1-2 hours',
+      preferredStyle: collectedData.questStyle || 'Solo-leveling quests',
+      skillLevel: collectedData.skillLevel || 'Intermediate'
+    };
+
+    console.log('Created onboarding profile:', onboardingProfile);
+
+    // Step 3: Save onboarding profile (non-blocking)
+    updateProgress('Saving your profile...');
+    try {
+      await Promise.race([
+        firebaseDataService.saveOnboardingProfile(user.uid, onboardingProfile),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Profile save timeout')), 10000))
+      ]);
+      console.log('✅ Saved onboarding profile to Firebase');
+    } catch (error) {
+      console.warn('⚠️ Profile save failed, continuing:', error);
+    }
+    
+    // Step 4: Generate quests with retries
+    updateProgress('Generating your personalized quests...');
+    const questRequest = {
+      roles: onboardingProfile.interests,
+      goals: [onboardingProfile.goal],
+      skillLevel: onboardingProfile.skillLevel as 'Beginner' | 'Intermediate' | 'Advanced',
+      timeCommitment: onboardingProfile.dailyCommitment,
+      fitnessTypes: onboardingProfile.interests.filter(interest => 
+        interest.toLowerCase().includes('fitness') || 
+        interest.toLowerCase().includes('health') ||
+        interest.toLowerCase().includes('workout')
+      )
+    };
+
+    let generatedQuests: AIQuestResponse[] = [];
+    const maxRetries = 2;
+    
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        console.log(`Quest generation attempt ${attempt + 1}/${maxRetries}`);
+        const questResponse = await Promise.race([
+          generateAIQuests(questRequest),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Quest generation timeout')), 15000))
+        ]);
+        
+        if (isQuestResponseArray(questResponse)) {
+          generatedQuests = questResponse;
+          break;
+        }
+      } catch (error) {
+        console.warn(`Quest generation attempt ${attempt + 1} failed:`, error);
+        if (attempt === maxRetries - 1) {
+          console.log('Using fallback quests');
+          generatedQuests = []; // Will trigger fallback quest creation
+        }
+      }
+    }
+    
+    console.log('✅ Generated', generatedQuests.length, 'quests');
+    
+    // Step 5: Save quests to Firebase (non-blocking)
+    updateProgress('Saving your quests...');
+    try {
+      await Promise.race([
+        firebaseDataService.saveGeneratedQuests(user.uid, generatedQuests),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Quest save timeout')), 8000))
+      ]);
+      console.log('✅ Saved quests to Firebase');
+    } catch (error) {
+      console.warn('⚠️ Quest save failed, continuing:', error);
+    }
+    
+    // Step 6: Add quests to game context
+    updateProgress('Setting up your quest board...');
+    let questsAdded = 0;
+    
+    // Add AI-generated quests or fallback quests
+    const questsToAdd = generatedQuests.length > 0 ? generatedQuests : getFallbackQuests();
+    
+    questsToAdd.forEach(quest => {
+      try {
+        const habitData = createHabitFromQuest(quest);
+        addHabit(habitData);
+        questsAdded++;
+        console.log(`✅ Added quest ${questsAdded}:`, habitData.title);
+      } catch (error) {
+        console.error('❌ Error adding quest to game:', error);
+      }
+    });
+
+    console.log(`✅ Successfully added ${questsAdded} quests to game context`);
+
+    // Step 7: Finalize profile and complete
+    await finalizeOnboarding(onboardingProfile, questsAdded);
+  };
+
+  const createHabitFromQuest = (quest: AIQuestResponse) => {
+    // Map quest frequency to expected types
+    let mappedFrequency: 'daily' | 'weekly' | 'milestone';
+    if (quest.frequency === 'Daily') {
+      mappedFrequency = 'daily';
+    } else if (quest.frequency === 'Weekly') {
+      mappedFrequency = 'weekly';
+    } else {
+      mappedFrequency = 'milestone';
+    }
+
+    // Map quest difficulty to expected types
+    let mappedDifficulty: 'basic' | 'intermediate' | 'elite';
+    if (quest.difficulty === 'Easy') {
+      mappedDifficulty = 'basic';
+    } else if (quest.difficulty === 'Hard') {
+      mappedDifficulty = 'elite';
+    } else {
+      mappedDifficulty = 'intermediate';
+    }
+
+    return {
+      title: quest.title,
+      category: quest.category,
+      xpReward: quest.xpReward,
+      frequency: mappedFrequency,
+      difficulty: mappedDifficulty,
+      description: `${quest.duration} - ${quest.subtasks.join(' • ')}`,
+      tier: quest.difficulty === 'Hard' ? 3 : quest.difficulty === 'Moderate' ? 2 : 1,
+    };
+  };
+
+  const getFallbackQuests = (): AIQuestResponse[] => {
+    return [
+      {
+        title: 'Shadow Progress Check',
+        duration: '15 minutes',
+        subtasks: ['Review daily goals', 'Track achievements', 'Plan next steps'],
+        difficulty: 'Easy',
+        frequency: 'Daily',
+        category: 'Personal',
+        xpReward: 25,
+      },
+      {
+        title: 'Skill Forge Training',
+        duration: '30 minutes',
+        subtasks: ['Practice core skills', 'Learn something new', 'Apply knowledge'],
+        difficulty: 'Moderate',
+        frequency: 'Daily',
+        category: 'Personal',
+        xpReward: 45,
+      }
+    ];
+  };
+
+  const finalizeOnboarding = async (onboardingProfile: any, questsAdded: number) => {
+    updateProgress('Finalizing your adventure...');
+    addMessage(`🗡️ All set, ${onboardingProfile.name}! I've crafted ${questsAdded} personalized quests for your journey. Your solo leveling adventure begins now!`, false);
+
+    // Create final user profile
+    const profile: UserProfile = {
+      interests: onboardingProfile.interests,
+      goals: onboardingProfile.goal,
+      routine: onboardingProfile.dailyCommitment,
+      questStyle: onboardingProfile.preferredStyle,
+      timeCommitment: onboardingProfile.dailyCommitment,
+      fitnessPreferences: onboardingProfile.interests.filter((i: string) => 
+        i.toLowerCase().includes('fitness') || i.toLowerCase().includes('health')
+      ),
+      skillLevel: onboardingProfile.skillLevel
+    };
+
+    // Save user profile (non-blocking)
+    try {
+      await firebaseDataService.saveUserProfile(user.uid, profile);
+      console.log('✅ Saved user profile to Firebase');
+    } catch (error) {
+      console.warn('⚠️ User profile save failed:', error);
+    }
+    
+    // Clear onboarding progress
+    localStorage.removeItem('onboarding_progress');
+    
+    // Show success toast
+    toast({
+      title: "🎉 Welcome to AuraQuestGrind!",
+      description: `Your ${questsAdded} personalized quests are ready. Time to level up!`,
+    });
+
+    console.log('✅ Onboarding completed successfully, redirecting...');
+    
+    // Call onComplete callback and redirect
+    onComplete(profile);
+    
+    setTimeout(() => {
+      console.log('🚀 Navigating to /habits...');
+      navigate('/habits');
+    }, 2000);
+  };
+
+  const handleCompletionError = async (finalHistory: string) => {
+    setRetryCount(prev => prev + 1);
+    
+    if (retryCount < 2) {
+      setIsRetrying(true);
+      addMessage(`⚠️ Encountered an issue, retrying... (Attempt ${retryCount + 1}/2)`, false);
+      
+      setTimeout(async () => {
+        try {
+          await executeCompletionSteps(finalHistory);
+        } catch (error) {
+          await handleCompletionError(finalHistory);
+        } finally {
+          setIsRetrying(false);
+        }
+      }, 3000);
+      return;
+    }
+
+    // Final fallback
+    console.log('Using final fallback completion');
+    addMessage("⚠️ Had some technical difficulties, but I've set up a basic profile for you! You can customize everything later.", false, true);
+
+    const fallbackProfile: UserProfile = {
+      interests: collectedData.focusAreas || ['Personal Development'],
+      goals: collectedData.mainGoal || 'Improve productivity',
+      routine: collectedData.dailyCommitment || '1-2 hours daily',
+      questStyle: collectedData.questStyle || 'Flexible missions',
+      timeCommitment: collectedData.dailyCommitment || '1-2 hours daily',
+      fitnessPreferences: [],
+      skillLevel: collectedData.skillLevel || 'Intermediate'
+    };
+
+    // Add basic fallback quests
+    const fallbackQuests = getFallbackQuests();
+    fallbackQuests.forEach(quest => {
+      try {
+        const habitData = createHabitFromQuest(quest);
+        addHabit(habitData);
+      } catch (error) {
+        console.error('Error adding fallback quest:', error);
+      }
+    });
+
+    localStorage.removeItem('onboarding_progress');
+
+    toast({
+      title: "Profile Created",
+      description: "Basic setup complete. You can customize everything anytime!",
+      variant: "default",
+    });
+    
+    onComplete(fallbackProfile);
+    
+    setTimeout(() => {
+      navigate('/habits');
+    }, 2000);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -402,6 +477,34 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
     }
   };
 
+  // Progress persistence
+  useEffect(() => {
+    const savedProgress = localStorage.getItem('onboarding_progress');
+    if (savedProgress) {
+      try {
+        const progress = JSON.parse(savedProgress);
+        setUserInputCount(progress.userInputCount || 0);
+        setCollectedData(progress.collectedData || {});
+        setConversationHistory(progress.conversationHistory || '');
+        setMessages(progress.messages || []);
+        console.log('Restored onboarding progress:', progress);
+      } catch (error) {
+        console.error('Error restoring onboarding progress:', error);
+      }
+    }
+  }, []);
+
+  // Save progress on state changes
+  useEffect(() => {
+    const progress = {
+      userInputCount,
+      collectedData,
+      conversationHistory,
+      messages: messages.slice(-10) // Only save last 10 messages
+    };
+    localStorage.setItem('onboarding_progress', JSON.stringify(progress));
+  }, [userInputCount, collectedData, conversationHistory, messages]);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 text-white flex items-center justify-center p-4">
       <div className="w-full max-w-4xl bg-gray-900/80 backdrop-blur-lg rounded-2xl border border-purple-500/30 overflow-hidden">
@@ -410,7 +513,7 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <div className="bg-gradient-to-r from-purple-500 to-cyan-500 p-2 rounded-lg">
-                {isCompleting ? (
+                {isCompleting || isRetrying ? (
                   <Loader2 className="text-white animate-spin" size={24} />
                 ) : hasError ? (
                   <AlertCircle className="text-red-400" size={24} />
@@ -420,10 +523,14 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
               </div>
               <div>
                 <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent">
-                  {isCompleting ? 'Setting Up Your Quest Profile' : 'AuraQuestGrind Setup'}
+                  {isCompleting || isRetrying ? 'Setting Up Your Quest Profile' : 'AuraQuestGrind Setup'}
                 </h1>
                 <p className="text-gray-300">
-                  {isCompleting ? completionProgress || 'Generating personalized quests...' : 'AI-powered personalization (max 5 questions)'}
+                  {isCompleting || isRetrying ? 
+                    completionProgress || 'Generating personalized quests...' : 
+                    'AI-powered personalization (max 5 questions)'
+                  }
+                  {isRetrying && ` (Retrying: ${retryCount}/2)`}
                 </p>
               </div>
             </div>
@@ -473,7 +580,7 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
             </div>
           ))}
           
-          {(isLoading || isCompleting) && (
+          {(isLoading || isCompleting || isRetrying) && (
             <div className="flex justify-start">
               <div className="flex space-x-3 max-w-3xl">
                 <div className="w-8 h-8 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center">
@@ -502,20 +609,25 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
               onKeyPress={handleKeyPress}
               placeholder={userInputCount >= 5 ? "Setting up your profile..." : "Type your response..."}
               className="flex-1 bg-gray-800/50 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none"
-              disabled={isLoading || userInputCount >= 5 || isCompleting}
+              disabled={isLoading || userInputCount >= 5 || isCompleting || isRetrying}
             />
             <button
               onClick={handleSendMessage}
-              disabled={isLoading || !inputValue.trim() || userInputCount >= 5 || isCompleting}
+              disabled={isLoading || !inputValue.trim() || userInputCount >= 5 || isCompleting || isRetrying}
               className="bg-gradient-to-r from-purple-600 to-cyan-600 p-3 rounded-lg hover:shadow-lg hover:shadow-purple-500/25 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Send size={20} />
             </button>
           </div>
-          {hasError && (
+          {(hasError || isRetrying) && (
             <p className="text-red-400 text-sm mt-2 flex items-center space-x-1">
               <AlertCircle size={14} />
-              <span>Some features may be limited due to connection issues, but your profile will still be created.</span>
+              <span>
+                {isRetrying ? 
+                  `Retrying completion process (${retryCount}/2)...` :
+                  'Some features may be limited due to connection issues, but your profile will still be created.'
+                }
+              </span>
             </p>
           )}
         </div>

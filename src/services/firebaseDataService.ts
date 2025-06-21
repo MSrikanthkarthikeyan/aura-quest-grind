@@ -1,4 +1,3 @@
-
 import { 
   doc, 
   setDoc, 
@@ -123,44 +122,66 @@ export const firebaseDataService = {
     }, 'loadGameData');
   },
 
-  // Save user profile from AI onboarding with retry logic
+  // Save user profile from AI onboarding with retry logic and timeout
   async saveUserProfile(uid: string, profile: UserProfile) {
     return retryOperation(async () => {
       console.log(`Saving user profile for user ${uid}:`, profile);
       const userDocRef = doc(db, 'userProfiles', uid);
-      await setDoc(userDocRef, {
+      
+      // Add timeout to prevent hanging
+      const savePromise = setDoc(userDocRef, {
         ...profile,
         createdAt: serverTimestamp(),
         lastUpdated: serverTimestamp()
       });
+      
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Save operation timeout')), 10000)
+      );
+      
+      await Promise.race([savePromise, timeoutPromise]);
       console.log('User profile saved successfully');
     }, 'saveUserProfile');
   },
 
-  // Save onboarding profile to new structure with retry logic
+  // Save onboarding profile with timeout
   async saveOnboardingProfile(uid: string, profile: OnboardingProfile) {
     return retryOperation(async () => {
       console.log(`Saving onboarding profile for user ${uid}:`, profile);
       const userDocRef = doc(db, 'users', uid, 'profile', 'onboardingData');
-      await setDoc(userDocRef, {
+      
+      const savePromise = setDoc(userDocRef, {
         ...profile,
         createdAt: serverTimestamp(),
         lastUpdated: serverTimestamp()
       });
+      
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Save operation timeout')), 8000)
+      );
+      
+      await Promise.race([savePromise, timeoutPromise]);
       console.log('Onboarding profile saved successfully');
     }, 'saveOnboardingProfile');
   },
 
-  // Save generated quests with retry logic
+  // Save generated quests with timeout
   async saveGeneratedQuests(uid: string, quests: any[]) {
     return retryOperation(async () => {
       console.log(`Saving generated quests for user ${uid}:`, quests);
       const questsDocRef = doc(db, 'users', uid, 'quests', 'generated');
-      await setDoc(questsDocRef, {
+      
+      const savePromise = setDoc(questsDocRef, {
         quests,
         createdAt: serverTimestamp(),
         lastUpdated: serverTimestamp()
       });
+      
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Save operation timeout')), 8000)
+      );
+      
+      await Promise.race([savePromise, timeoutPromise]);
       console.log('Generated quests saved successfully');
     }, 'saveGeneratedQuests');
   },
@@ -181,7 +202,7 @@ export const firebaseDataService = {
     }, 'getUserProfile');
   },
 
-  // Listen to real-time updates with improved error handling
+  // Listen to real-time updates with improved error handling and reconnection
   subscribeToGameData(uid: string, callback: (data: FirebaseGameData | null) => void) {
     try {
       console.log(`Setting up real-time subscription for user ${uid}`);
@@ -190,6 +211,7 @@ export const firebaseDataService = {
       return onSnapshot(userDocRef, 
         (doc) => {
           console.log('Real-time update received');
+          isConnected = true; // Mark as connected on successful update
           if (doc.exists()) {
             callback(doc.data() as FirebaseGameData);
           } else {
@@ -200,7 +222,12 @@ export const firebaseDataService = {
         (error) => {
           console.error('Real-time subscription error:', error);
           handleFirebaseError(error, 'subscribeToGameData');
-          // Don't throw, let the subscription continue with retries
+          
+          // Attempt to reconnect after a delay
+          setTimeout(() => {
+            console.log('Attempting to reestablish real-time connection...');
+            this.subscribeToGameData(uid, callback);
+          }, 5000);
         }
       );
     } catch (error) {
@@ -260,5 +287,21 @@ export const firebaseDataService = {
   // Get connection status
   getConnectionStatus() {
     return { isConnected, retryAttempts };
+  },
+
+  // Manual reconnection method
+  async testConnection() {
+    try {
+      // Simple test operation
+      const testDoc = doc(db, 'test', 'connection');
+      await getDoc(testDoc);
+      isConnected = true;
+      console.log('Firebase connection test successful');
+      return true;
+    } catch (error) {
+      console.error('Firebase connection test failed:', error);
+      isConnected = false;
+      return false;
+    }
   }
 };
