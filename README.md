@@ -1,73 +1,120 @@
-# Welcome to your Lovable project
 
-## Project info
+```markdown
+# Aura Quest Grind 🎯  
+_An AI-powered productivity platform that turns your goals into structured, gamified quests._
 
-**URL**: https://lovable.dev/projects/eb94dde3-94be-466c-afd1-b42d57101642
+---
 
-## How can I edit this code?
+## 🚀 Overview
 
-There are several ways of editing your application.
+Aura Quest Grind is a smart productivity tool that leverages AI to help users convert their personal or academic goals into well-structured tasks, using **gamification**, **Pomodoro techniques**, and **dynamic task guidance**. The system personalizes each user's experience via an intelligent onboarding flow, enabling focused work through AI-generated subtasks, time estimation, and integrated resource suggestions.
 
-**Use Lovable**
+---
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/eb94dde3-94be-466c-afd1-b42d57101642) and start prompting.
+## 📌 Key Features
 
-Changes made via Lovable will be committed automatically to this repo.
+- **AI Onboarding Flow** – Captures user preferences/goals within 5 tailored prompts and stores them in the backend.
+- **Quest Generator** – Uses AI to break goals into structured subtasks with estimated times.
+- **Pomodoro Sync** – Redirects to a pomodoro page with accurate cycles based on AI time breakdown.
+- **Follow-up Assistant** – One-click AI resource fetcher for each subtask (if users want more help).
+- **Backend Integration** – MongoDB Atlas handles all user data, preferences, quests, and progress.
 
-**Use your preferred IDE**
+---
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+## 🛠 Tech Stack
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+| Tech         | Purpose                        |
+|--------------|--------------------------------|
+| **React + Vite** | Frontend framework             |
+| **Tailwind CSS** | UI design and utility classes  |
+| **Lovable.dev + Gemini AI** | Onboarding + task generation |
+| **MongoDB Atlas** | Cloud database                |
+| **Node.js + Express** | Backend API server         |
 
-Follow these steps:
+---
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+## 📁 Project Structure
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+```
 
-# Step 3: Install the necessary dependencies.
-npm i
+/client/           → Frontend (Vite + React)
+/server/           → Backend API (Node.js + Express)
+/config.env        → MongoDB connection URI
+/public/           → Static assets
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+````
+
+---
+
+## 🧩 Setup Instructions
+
+### 🔐 Prerequisites
+
+- Node.js 18+
+- MongoDB Atlas URI
+- `.env` file with credentials
+
+### ⚙️ Backend
+
+```bash
+cd server
+npm install
+
+# Add MongoDB URI in config.env
+echo "ATLAS_URI=<your-mongo-uri>" > config.env
+
+node connect.cjs   # For testing connection
+node server.js     # Or nodemon
+````
+
+### 🖼 Frontend
+
+```bash
+cd client
+npm install
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+---
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## 📡 API Overview
 
-**Use GitHub Codespaces**
+| Route                 | Description                      |
+| --------------------- | -------------------------------- |
+| `POST /api/users`     | Create new user with preferences |
+| `POST /api/quests`    | Generate and store AI quest      |
+| `GET /api/quests/:id` | Retrieve user's quests           |
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+---
 
-## What technologies are used for this project?
+## 🧠 How Onboarding Works
 
-This project is built with:
+1. After signup, user answers 5 tailored AI prompts.
+2. Responses are stored in MongoDB.
+3. AI generates a full quest with subtasks and time estimates.
+4. User is redirected to their quest dashboard.
+5. Each subtask has an optional “Follow-up with AI” feature for more help.
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+---
 
-## How can I deploy this project?
+## ✅ Current Status
 
-Simply open [Lovable](https://lovable.dev/projects/eb94dde3-94be-466c-afd1-b42d57101642) and click on Share -> Publish.
+* [x] Functional AI onboarding (5-prompt max)
+* [x] Quest generation and MongoDB storage
+* [x] Pomodoro time breakdown from subtasks
+* [x] Follow-up AI suggestions for subtasks
+* [x] User XP & gamification system
+* [x] UI polishing and animations
+* [x] Deployment (Render / Vercel)
 
-## Can I connect a custom domain to my Lovable project?
+---
 
-Yes, you can!
+## 👤 Author
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+**Srikanth Karthikeyan**
+B.Tech CSE | Full-Stack Developer | AI + Web3 Enthusiast
+[LinkedIn](https://www.linkedin.com/in/srikanth-karthikeyan/) | [Portfolio](https://your-portfolio-link.com)
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+---
+
+
