@@ -9,11 +9,16 @@ export interface AIQuestRequest {
 export interface AIQuestResponse {
   title: string;
   duration: string;
-  subtasks: string[];
+  subtasks: Array<{
+    title: string;
+    description: string;
+    estimatedPomodoros: number;
+  }>;
   difficulty: 'Easy' | 'Moderate' | 'Hard';
   frequency: 'Daily' | 'Weekly' | 'Once' | 'Custom';
   category: string;
   xpReward: number;
+  totalEstimatedPomodoros?: number;
 }
 
 interface OnboardingResponse {
@@ -250,29 +255,44 @@ const getFallbackQuests = (): AIQuestResponse[] => {
     {
       title: 'Shadow Code Training',
       duration: '30 minutes',
-      subtasks: ['Review yesterday\'s progress', 'Write clean, focused code', 'Test and debug thoroughly'],
+      subtasks: [
+        { title: 'Review Progress', description: 'Review yesterday\'s progress', estimatedPomodoros: 1 },
+        { title: 'Write Code', description: 'Write clean, focused code', estimatedPomodoros: 2 },
+        { title: 'Test & Debug', description: 'Test and debug thoroughly', estimatedPomodoros: 1 }
+      ],
       difficulty: 'Moderate',
       frequency: 'Daily',
       category: 'Tech',
       xpReward: 45,
+      totalEstimatedPomodoros: 4,
     },
     {
       title: 'Skill Mastery Quest',
       duration: '45 minutes',
-      subtasks: ['Study new concepts', 'Practice implementation', 'Build something useful'],
+      subtasks: [
+        { title: 'Study Concepts', description: 'Study new concepts', estimatedPomodoros: 2 },
+        { title: 'Practice Implementation', description: 'Practice implementation', estimatedPomodoros: 2 },
+        { title: 'Build Project', description: 'Build something useful', estimatedPomodoros: 2 }
+      ],
       difficulty: 'Moderate',
       frequency: 'Daily',
       category: 'Personal',
       xpReward: 50,
+      totalEstimatedPomodoros: 6,
     },
     {
       title: 'Weekly Reflection Ritual',
       duration: '1 hour',
-      subtasks: ['Review weekly achievements', 'Assess progress toward goals', 'Plan upcoming challenges'],
+      subtasks: [
+        { title: 'Review Achievements', description: 'Review weekly achievements', estimatedPomodoros: 1 },
+        { title: 'Assess Progress', description: 'Assess progress toward goals', estimatedPomodoros: 1 },
+        { title: 'Plan Challenges', description: 'Plan upcoming challenges', estimatedPomodoros: 1 }
+      ],
       difficulty: 'Easy',
       frequency: 'Weekly',
       category: 'Personal',
       xpReward: 75,
+      totalEstimatedPomodoros: 3,
     }
   ];
 };
@@ -496,11 +516,25 @@ const parseAIResponse = (response: string): AIQuestResponse[] => {
     const mappedQuests = quests.map((quest: any) => ({
       title: quest.title || 'Generated Quest',
       duration: quest.duration || '30 minutes',
-      subtasks: Array.isArray(quest.subtasks) ? quest.subtasks : [],
+      subtasks: Array.isArray(quest.subtasks) ? quest.subtasks.map((subtask: any, index: number) => {
+        if (typeof subtask === 'string') {
+          return {
+            title: `Step ${index + 1}`,
+            description: subtask,
+            estimatedPomodoros: 1
+          };
+        }
+        return {
+          title: subtask.title || `Step ${index + 1}`,
+          description: subtask.description || subtask,
+          estimatedPomodoros: subtask.estimatedPomodoros || 1
+        };
+      }) : [],
       difficulty: quest.difficulty || 'Moderate',
       frequency: quest.frequency || 'Daily',
       category: quest.category || 'Personal',
       xpReward: quest.xpReward || 35,
+      totalEstimatedPomodoros: quest.totalEstimatedPomodoros || quest.subtasks?.reduce((sum: number, st: any) => sum + (typeof st === 'object' ? st.estimatedPomodoros || 1 : 1), 0) || 4,
     }));
     
     console.log('Final mapped quests count:', mappedQuests.length);
