@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useGame } from '../context/GameContext';
 import { generateAIQuests, AIQuestRequest, AIQuestResponse } from '../services/geminiService';
@@ -92,7 +91,7 @@ const AIQuestGenerator = ({ onClose }: AIQuestGeneratorProps) => {
           xpReward: quest.xpReward,
           frequency: mapFrequency(quest.frequency),
           difficulty: mapDifficulty(quest.difficulty),
-          description: `${quest.duration} - ${quest.subtasks.join(' • ')}`,
+          description: `${quest.duration} - ${quest.subtasks.map(st => st.title).join(' • ')}`,
           tier: quest.difficulty === 'Hard' ? 3 : quest.difficulty === 'Moderate' ? 2 : 1,
         };
         
@@ -163,6 +162,7 @@ const AIQuestGenerator = ({ onClose }: AIQuestGeneratorProps) => {
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-gradient-to-br from-gray-900/95 to-purple-900/50 rounded-2xl border border-purple-500/30 max-w-4xl w-full max-h-[90vh] overflow-hidden">
+        {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-700/50">
           <div className="flex items-center space-x-3">
             <Sparkles className="text-purple-400" size={24} />
@@ -336,7 +336,7 @@ const AIQuestGenerator = ({ onClose }: AIQuestGeneratorProps) => {
                       {quest.subtasks.map((subtask, i) => (
                         <div key={i} className="flex items-center space-x-2 text-sm text-gray-300">
                           <div className="w-1 h-1 bg-purple-400 rounded-full" />
-                          <span>{subtask}</span>
+                          <span>{subtask.title}</span>
                         </div>
                       ))}
                     </div>

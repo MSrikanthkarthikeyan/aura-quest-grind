@@ -338,7 +338,7 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
       xpReward: quest.xpReward,
       frequency: mappedFrequency,
       difficulty: mappedDifficulty,
-      description: `${quest.duration} - ${quest.subtasks.join(' • ')}`,
+      description: `${quest.duration} - ${quest.subtasks.map(st => st.title).join(' • ')}`,
       tier: quest.difficulty === 'Hard' ? 3 : quest.difficulty === 'Moderate' ? 2 : 1,
     };
   };
@@ -348,7 +348,11 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
       {
         title: 'Shadow Progress Check',
         duration: '15 minutes',
-        subtasks: ['Review daily goals', 'Track achievements', 'Plan next steps'],
+        subtasks: [
+          { title: 'Review Daily Goals', description: 'Review daily goals', estimatedPomodoros: 1 },
+          { title: 'Track Achievements', description: 'Track achievements', estimatedPomodoros: 1 },
+          { title: 'Plan Next Steps', description: 'Plan next steps', estimatedPomodoros: 1 }
+        ],
         difficulty: 'Easy',
         frequency: 'Daily',
         category: 'Personal',
@@ -357,7 +361,11 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
       {
         title: 'Skill Forge Training',
         duration: '30 minutes',
-        subtasks: ['Practice core skills', 'Learn something new', 'Apply knowledge'],
+        subtasks: [
+          { title: 'Practice Core Skills', description: 'Practice core skills', estimatedPomodoros: 2 },
+          { title: 'Learn Something New', description: 'Learn something new', estimatedPomodoros: 1 },
+          { title: 'Apply Knowledge', description: 'Apply knowledge', estimatedPomodoros: 1 }
+        ],
         difficulty: 'Moderate',
         frequency: 'Daily',
         category: 'Personal',
