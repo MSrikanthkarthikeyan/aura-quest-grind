@@ -113,7 +113,7 @@ npm run dev
 
 **Srikanth Karthikeyan**
 B.Tech CSE | Full-Stack Developer | AI + Web3 Enthusiast
-[LinkedIn](https://www.linkedin.com/in/srikanth-karthikeyan/) | [Portfolio](https://your-portfolio-link.com)
+[LinkedIn](https://www.linkedin.com/in/srikanth-karthikeyan/) | [Portfolio](https://drive.google.com/file/d/1FmTKUQT1sN7zHuYpTlpIzmoD3-8arYUP/view?usp=sharing)
 
 ---
 
