@@ -510,3 +510,179 @@ const parseAIResponse = (response: string): AIQuestResponse[] => {
     return getFallbackQuests();
   }
 };
+
+export const generateQuestWithSubtasks = async (request: AIQuestRequest): Promise<AIQuestResponse[]> => {
+  console.log('Gemini API: Starting quest with subtasks generation:', request);
+  
+  try {
+    const prompt = createQuestWithSubtasksPrompt(request);
+    console.log('Gemini API: Generated quest with subtasks prompt length:', prompt.length);
+    
+    const requestBody = createSerializableRequest({
+      contents: [{
+        parts: [{
+          text: prompt
+        }]
+      }],
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 3000,
+      }
+    });
+
+    console.log('Gemini API: Making quest with subtasks request...');
+    
+    const response = await retryApiCall(() => 
+      fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      })
+    );
+
+    console.log('Gemini API: Quest with subtasks response status:', response.status);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Gemini API: Quest with subtasks error response body:', errorText);
+      throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    console.log('Gemini API: Quest with subtasks response received successfully');
+    
+    const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    console.log('Gemini API: Generated quest with subtasks text length:', generatedText?.length || 0);
+    
+    if (!generatedText) {
+      console.error('Gemini API: No quest with subtasks content generated');
+      return getFallbackQuestsWithSubtasks();
+    }
+
+    const parsedQuests = parseQuestWithSubtasksResponse(generatedText);
+    console.log('Gemini API: Successfully parsed', parsedQuests.length, 'quests with subtasks');
+    
+    return parsedQuests;
+  } catch (error) {
+    console.error('Gemini AI: Error generating quests with subtasks:', error);
+    return getFallbackQuestsWithSubtasks();
+  }
+};
+
+const createQuestWithSubtasksPrompt = (request: AIQuestRequest): string => {
+  const rolesText = request.roles.join(', ');
+  const goalsText = request.goals.join(', ');
+  const fitnessText = request.fitnessTypes ? `, with fitness focus on ${request.fitnessTypes.join(', ')}` : '';
+
+  return `Generate 3-5 personalized quests for a user who is a ${rolesText} aiming to ${goalsText}. The user is a ${request.skillLevel} level and has ${request.timeCommitment} available${fitnessText}.
+
+For each quest, break it down into 3-5 specific, actionable subtasks. Each subtask should be something that can be completed in 1-4 pomodoro sessions (25 minutes each). Estimate the number of pomodoros needed for each subtask based on complexity and skill level.
+
+Please provide your response in the following JSON format:
+[
+  {
+    "title": "Quest title (gamified, RPG-themed like 'Shadow Script Practice' or 'Algorithm Abyss')",
+    "duration": "Total realistic time estimate based on subtasks",
+    "subtasks": [
+      {
+        "title": "Specific subtask title",
+        "description": "Detailed description of what to do",
+        "estimatedPomodoros": 2
+      }
+    ],
+    "difficulty": "Easy|Moderate|Hard",
+    "frequency": "Daily|Weekly|Once|Custom",
+    "category": "Tech|Academics|Business|Content|Fitness|Personal",
+    "xpReward": 25-100,
+    "totalEstimatedPomodoros": "Sum of all subtask pomodoros"
+  }
+]
+
+Requirements:
+- Use engaging, RPG-themed quest titles
+- Make subtasks specific and actionable
+- Estimate pomodoros realistically (beginners need more time)
+- Each subtask should be 1-4 pomodoros max
+- Total quest should be 4-15 pomodoros depending on difficulty
+- Match difficulty to user's skill level
+- Categories should match: Tech, Academics, Business, Content, Fitness, Personal
+- XP rewards: Easy (25-40), Moderate (45-70), Hard (75-100)
+
+Return only the JSON array, no additional text.`;
+};
+
+const parseQuestWithSubtasksResponse = (response: string): AIQuestResponse[] => {
+  console.log('Parsing quest with subtasks response length:', response.length);
+  
+  try {
+    // Clean the response to extract JSON
+    const jsonMatch = response.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) {
+      console.error('No JSON array found in quest with subtasks response');
+      return getFallbackQuestsWithSubtasks();
+    }
+    
+    const cleanedResponse = jsonMatch[0];
+    console.log('Extracted quest with subtasks JSON length:', cleanedResponse.length);
+    
+    const quests = JSON.parse(cleanedResponse);
+    console.log('Parsed', quests.length, 'quests with subtasks from AI');
+    
+    const mappedQuests = quests.map((quest: any) => ({
+      title: quest.title || 'Generated Quest',
+      duration: quest.duration || '2 hours',
+      subtasks: Array.isArray(quest.subtasks) ? quest.subtasks.map((subtask: any) => ({
+        title: subtask.title || 'Subtask',
+        description: subtask.description || 'Complete this part of the quest',
+        estimatedPomodoros: subtask.estimatedPomodoros || 2
+      })) : [],
+      difficulty: quest.difficulty || 'Moderate',
+      frequency: quest.frequency || 'Daily',
+      category: quest.category || 'Personal',
+      xpReward: quest.xpReward || 35,
+      totalEstimatedPomodoros: quest.totalEstimatedPomodoros || quest.subtasks?.reduce((sum: number, st: any) => sum + (st.estimatedPomodoros || 2), 0) || 4,
+    }));
+    
+    console.log('Final mapped quests with subtasks count:', mappedQuests.length);
+    return mappedQuests;
+  } catch (error) {
+    console.error('Error parsing quest with subtasks response:', error);
+    return getFallbackQuestsWithSubtasks();
+  }
+};
+
+const getFallbackQuestsWithSubtasks = (): AIQuestResponse[] => {
+  console.log('Using fallback quests with subtasks due to API failure');
+  return [
+    {
+      title: 'Shadow Code Training',
+      duration: '2 hours',
+      subtasks: [
+        { title: 'Setup Development Environment', description: 'Configure your coding workspace with necessary tools', estimatedPomodoros: 2 },
+        { title: 'Review Core Concepts', description: 'Go through fundamental programming concepts', estimatedPomodoros: 3 },
+        { title: 'Practice Coding', description: 'Write and test sample code implementations', estimatedPomodoros: 3 }
+      ],
+      difficulty: 'Moderate',
+      frequency: 'Daily',
+      category: 'Tech',
+      xpReward: 45,
+      totalEstimatedPomodoros: 8,
+    },
+    {
+      title: 'Skill Mastery Quest',
+      duration: '90 minutes',
+      subtasks: [
+        { title: 'Research New Techniques', description: 'Study advanced methods in your field', estimatedPomodoros: 2 },
+        { title: 'Practice Implementation', description: 'Apply new techniques in practical exercises', estimatedPomodoros: 3 },
+        { title: 'Create Something Useful', description: 'Build a project that demonstrates your learning', estimatedPomodoros: 2 }
+      ],
+      difficulty: 'Moderate',
+      frequency: 'Daily',
+      category: 'Personal',
+      xpReward: 50,
+      totalEstimatedPomodoros: 7,
+    }
+  ];
+};

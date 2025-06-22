@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useRef } from 'r
 import { questTemplates, getQuestsForRoles, QuestTemplate } from '../utils/questTemplates';
 import { useAuth } from './AuthContext';
 import { firebaseDataService } from '../services/firebaseDataService';
+import { QuestSubtask, QuestFollowUp } from '../types/quest';
 
 interface Character {
   name: string;
@@ -31,6 +32,13 @@ interface Habit {
   description: string;
   tier: number;
   isCustom?: boolean;
+}
+
+interface EnhancedHabit extends Habit {
+  subtasks?: QuestSubtask[];
+  totalEstimatedPomodoros?: number;
+  currentSubtaskIndex?: number;
+  followUps?: QuestFollowUp[];
 }
 
 interface UserRoles {
@@ -75,6 +83,9 @@ interface GameContextType {
   getStreakCount: () => number;
   recordDailyLogin: () => void;
   syncToFirebase: () => void;
+  completeSubtask: (habitId: string, subtaskId: string) => void;
+  addQuestFollowUp: (habitId: string, followUp: QuestFollowUp) => void;
+  getQuestFollowUps: (habitId: string) => QuestFollowUp[];
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -413,22 +424,90 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setHabits(prev =>
       prev.map(habit => {
         if (habit.id === habitId && !habit.completed) {
+          const enhancedHabit = habit as EnhancedHabit;
+          let updatedHabit = { ...enhancedHabit };
+          
+          // If habit has subtasks, check if all are completed
+          if (enhancedHabit.subtasks && enhancedHabit.subtasks.length > 0) {
+            const allSubtasksCompleted = enhancedHabit.subtasks.every(st => st.isCompleted);
+            if (!allSubtasksCompleted) {
+              console.log('Not all subtasks completed for habit:', habitId);
+              return habit; // Don't complete if subtasks remain
+            }
+          }
+          
           const newStreak = habit.streak + 1;
           gainXP(habit.xpReward, getCategoryStatType(habit.category));
           
           // Check for achievements
           checkAchievements(newStreak);
           
-          return {
-            ...habit,
+          updatedHabit = {
+            ...updatedHabit,
             completed: true,
             streak: newStreak,
             lastCompleted: new Date().toISOString(),
+          };
+          
+          return updatedHabit;
+        }
+        return habit;
+      })
+    );
+  };
+
+  const completeSubtask = (habitId: string, subtaskId: string) => {
+    setHabits(prev =>
+      prev.map(habit => {
+        if (habit.id === habitId) {
+          const enhancedHabit = habit as EnhancedHabit;
+          if (!enhancedHabit.subtasks) return habit;
+          
+          const updatedSubtasks = enhancedHabit.subtasks.map(subtask =>
+            subtask.id === subtaskId ? { ...subtask, isCompleted: true } : subtask
+          );
+          
+          // Find next incomplete subtask
+          const nextIncompleteIndex = updatedSubtasks.findIndex(st => !st.isCompleted);
+          
+          const updatedHabit: EnhancedHabit = {
+            ...enhancedHabit,
+            subtasks: updatedSubtasks,
+            currentSubtaskIndex: nextIncompleteIndex === -1 ? updatedSubtasks.length - 1 : nextIncompleteIndex
+          };
+          
+          // If all subtasks are completed, allow quest completion
+          if (nextIncompleteIndex === -1) {
+            console.log('All subtasks completed for habit:', habitId);
+          }
+          
+          return updatedHabit;
+        }
+        return habit;
+      })
+    );
+  };
+
+  const addQuestFollowUp = (habitId: string, followUp: QuestFollowUp) => {
+    setHabits(prev =>
+      prev.map(habit => {
+        if (habit.id === habitId) {
+          const enhancedHabit = habit as EnhancedHabit;
+          const updatedFollowUps = [...(enhancedHabit.followUps || []), followUp];
+          
+          return {
+            ...enhancedHabit,
+            followUps: updatedFollowUps
           };
         }
         return habit;
       })
     );
+  };
+
+  const getQuestFollowUps = (habitId: string): QuestFollowUp[] => {
+    const habit = habits.find(h => h.id === habitId) as EnhancedHabit;
+    return habit?.followUps || [];
   };
 
   const checkAchievements = (streak: number) => {
@@ -575,6 +654,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       getStreakCount,
       recordDailyLogin,
       syncToFirebase,
+      completeSubtask,
+      addQuestFollowUp,
+      getQuestFollowUps,
     }}>
       {children}
     </GameContext.Provider>
