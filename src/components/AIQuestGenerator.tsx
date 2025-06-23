@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useGame } from '../context/GameContext';
 import { generateQuestWithSubtasks } from '../services/geminiService';
@@ -18,10 +17,12 @@ const AIQuestGenerator = () => {
 
     setIsGenerating(true);
     try {
+      const skillLevel = character.level > 10 ? 'Advanced' : character.level > 5 ? 'Intermediate' : 'Beginner';
+      
       const request = {
         roles: userRoles?.roles || ['General'],
         goals: [customPrompt],
-        skillLevel: character.level > 10 ? 'Advanced' : character.level > 5 ? 'Intermediate' : 'Beginner',
+        skillLevel: skillLevel as 'Advanced' | 'Intermediate' | 'Beginner',
         timeCommitment: '1-2 hours daily',
         fitnessTypes: userRoles?.fitnessTypes || []
       };
@@ -82,10 +83,12 @@ const AIQuestGenerator = () => {
 
     setIsGenerating(true);
     try {
+      const skillLevel = character.level > 10 ? 'Advanced' : character.level > 5 ? 'Intermediate' : 'Beginner';
+      
       const request = {
         roles: userRoles.roles,
         goals: userRoles.roles.map(role => `Improve ${role} skills`),
-        skillLevel: character.level > 10 ? 'Advanced' : character.level > 5 ? 'Intermediate' : 'Beginner',
+        skillLevel: skillLevel as 'Advanced' | 'Intermediate' | 'Beginner',
         timeCommitment: '1-2 hours daily',
         fitnessTypes: userRoles.fitnessTypes
       };
