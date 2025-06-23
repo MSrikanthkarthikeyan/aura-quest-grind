@@ -1,310 +1,287 @@
+
 import React, { useState } from 'react';
 import { useGame } from '../context/GameContext';
-import { Plus, Target, Zap, Flame, Crown, Settings, Lightbulb, Sparkles, Calendar } from 'lucide-react';
-import QuestSuggestions from './QuestSuggestions';
-import AIQuestGenerator from './AIQuestGenerator';
-import QuestPomodoroLauncher from './QuestPomodoroLauncher';
-import CalendarHeatmap from './CalendarHeatmap';
+import { Crown, Zap, Calendar, Clock, CheckCircle, Play, MessageCircle, ListTodo } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { QuestSubtask } from '../types/quest';
+import QuestFollowUpTab from './QuestFollowUpTab';
 
 const QuestBoard = () => {
-  const { habits, completeHabit, character, addHabit, startQuestSession } = useGame();
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [showAIGenerator, setShowAIGenerator] = useState(false);
-  const [showPomodoroLauncher, setShowPomodoroLauncher] = useState(false);
-  const [selectedQuest, setSelectedQuest] = useState<any>(null);
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [showCalendar, setShowCalendar] = useState(false);
-  
-  const [newHabit, setNewHabit] = useState({
-    title: '',
-    category: 'Personal',
-    xpReward: 25,
-    frequency: 'daily' as const,
-    difficulty: 'basic' as const,
-    description: '',
-    tier: 1,
-  });
+  const { habits, completeHabit, startQuestSession, completeSubtask, addQuestFollowUp, getQuestFollowUps } = useGame();
+  const navigate = useNavigate();
+  const [expandedQuest, setExpandedQuest] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'subtasks' | 'followup'>('subtasks');
 
-  const categories = ['all', 'Tech', 'Academics', 'Business', 'Content', 'Fitness', 'Personal'];
-  const categoryColors = {
-    'Tech': 'from-green-600 to-emerald-600',
-    'Academics': 'from-blue-600 to-indigo-600',
-    'Business': 'from-yellow-600 to-orange-600',
-    'Content': 'from-pink-600 to-rose-600',
-    'Fitness': 'from-red-600 to-pink-600',
-    'Personal': 'from-purple-600 to-violet-600',
-  };
-
-  const difficultyColors = {
-    'basic': 'text-green-400',
-    'intermediate': 'text-yellow-400',
-    'elite': 'text-red-400',
-  };
-
-  const handleAddHabit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newHabit.title.trim()) {
-      addHabit(newHabit);
-      setNewHabit({ 
-        title: '', 
-        category: 'Personal', 
-        xpReward: 25, 
-        frequency: 'daily',
-        difficulty: 'basic',
-        description: '',
-        tier: 1,
-      });
-      setShowAddForm(false);
+  const getDifficultyColor = (difficulty: string) => {
+    switch (difficulty) {
+      case 'basic': return 'text-green-400 border-green-400';
+      case 'intermediate': return 'text-yellow-400 border-yellow-400';
+      case 'elite': return 'text-red-400 border-red-400';
+      default: return 'text-gray-400 border-gray-400';
     }
   };
 
-  const handleQuestClick = (habit: any) => {
-    setSelectedQuest(habit);
-    setShowPomodoroLauncher(true);
+  const getCategoryColor = (category: string) => {
+    const colors: { [key: string]: string } = {
+      'Tech': 'from-purple-600/20 to-indigo-600/20 border-purple-500/30',
+      'Academics': 'from-blue-600/20 to-cyan-600/20 border-blue-500/30',
+      'Business': 'from-green-600/20 to-emerald-600/20 border-green-500/30',
+      'Fitness': 'from-red-600/20 to-orange-600/20 border-red-500/30',
+      'Personal': 'from-yellow-600/20 to-amber-600/20 border-yellow-500/30',
+      'Content': 'from-pink-600/20 to-rose-600/20 border-pink-500/30',
+    };
+    return colors[category] || 'from-gray-600/20 to-slate-600/20 border-gray-500/30';
   };
 
-  const handlePomodoroConfirm = (quest: any, pomodoroCount: number) => {
-    startQuestSession(quest.id, pomodoroCount);
-    setShowPomodoroLauncher(false);
+  const handleStartQuest = (questId: string, totalPomodoros: number) => {
+    startQuestSession(questId, totalPomodoros);
+    navigate(`/pomodoro?quest=${questId}&pomodoros=${totalPomodoros}`);
   };
 
-  const filteredHabits = selectedCategory === 'all' 
-    ? habits 
-    : habits.filter(habit => habit.category === selectedCategory);
+  const handleCompleteSubtask = (questId: string, subtaskId: string) => {
+    completeSubtask(questId, subtaskId);
+  };
 
-  const completedToday = habits.filter(h => h.completed).length;
-  const totalQuests = habits.length;
+  const getNextIncompleteSubtask = (subtasks: QuestSubtask[] = []) => {
+    return subtasks.find(st => !st.isCompleted);
+  };
+
+  const getCompletedSubtasks = (subtasks: QuestSubtask[] = []) => {
+    return subtasks.filter(st => st.isCompleted).length;
+  };
+
+  const getSubtaskProgress = (subtasks: QuestSubtask[] = []) => {
+    if (subtasks.length === 0) return 0;
+    return (getCompletedSubtasks(subtasks) / subtasks.length) * 100;
+  };
+
+  const canCompleteQuest = (quest: any) => {
+    const enhancedQuest = quest as any;
+    if (!enhancedQuest.subtasks || enhancedQuest.subtasks.length === 0) {
+      return true; // Old quests without subtasks can be completed normally
+    }
+    return enhancedQuest.subtasks.every((st: QuestSubtask) => st.isCompleted);
+  };
 
   return (
     <div className="p-8 space-y-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent">
-            Quest Board
-          </h1>
-          <p className="text-gray-400 mt-2">
-            Progress: {completedToday}/{totalQuests} quests completed today
-          </p>
-        </div>
-        <div className="flex space-x-4">
-          <button
-            onClick={() => setShowCalendar(!showCalendar)}
-            className="flex items-center space-x-2 bg-gradient-to-r from-orange-600 to-red-600 px-4 py-2 rounded-lg font-semibold hover:shadow-lg hover:shadow-orange-500/25 transition-all duration-300"
-          >
-            <Calendar size={18} />
-            <span>History</span>
-          </button>
-          <button
-            onClick={() => setShowAIGenerator(true)}
-            className="flex items-center space-x-2 bg-gradient-to-r from-purple-600 to-pink-600 px-4 py-2 rounded-lg font-semibold hover:shadow-lg hover:shadow-purple-500/25 transition-all duration-300"
-          >
-            <Sparkles size={18} />
-            <span>AI Quests</span>
-          </button>
-          <button
-            onClick={() => setShowSuggestions(true)}
-            className="flex items-center space-x-2 bg-gradient-to-r from-cyan-600 to-blue-600 px-4 py-2 rounded-lg font-semibold hover:shadow-lg hover:shadow-cyan-500/25 transition-all duration-300"
-          >
-            <Lightbulb size={18} />
-            <span>Suggestions</span>
-          </button>
-          <button
-            onClick={() => setShowAddForm(true)}
-            className="flex items-center space-x-2 bg-gradient-to-r from-purple-600 to-cyan-600 px-6 py-3 rounded-lg font-semibold hover:shadow-lg hover:shadow-purple-500/25 transition-all duration-300"
-          >
-            <Plus size={20} />
-            <span>Custom Quest</span>
-          </button>
-        </div>
+      <div className="text-center">
+        <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent mb-2">
+          Shadow Quest Board
+        </h1>
+        <p className="text-gray-400">Choose your path to greatness</p>
       </div>
 
-      {/* Calendar Heatmap */}
-      {showCalendar && (
-        <CalendarHeatmap />
-      )}
-
-      {/* Category Filter */}
-      <div className="flex flex-wrap gap-2">
-        {categories.map(category => (
-          <button
-            key={category}
-            onClick={() => setSelectedCategory(category)}
-            className={`px-4 py-2 rounded-lg font-medium transition-all duration-300 ${
-              selectedCategory === category
-                ? 'bg-gradient-to-r from-purple-600 to-cyan-600 text-white'
-                : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-            }`}
-          >
-            {category === 'all' ? 'All Quests' : category}
-          </button>
-        ))}
-      </div>
-
-      {/* AI Quest Generator Modal */}
-      {showAIGenerator && (
-        <AIQuestGenerator onClose={() => setShowAIGenerator(false)} />
-      )}
-
-      {/* Quest Pomodoro Launcher Modal */}
-      {showPomodoroLauncher && selectedQuest && (
-        <QuestPomodoroLauncher
-          quest={selectedQuest}
-          onClose={() => setShowPomodoroLauncher(false)}
-          onConfirm={handlePomodoroConfirm}
-        />
-      )}
-
-      {/* Quest Suggestions Modal */}
-      {showSuggestions && (
-        <QuestSuggestions onClose={() => setShowSuggestions(false)} />
-      )}
-
-      {/* Add Custom Quest Form */}
-      {showAddForm && (
-        <div className="bg-gradient-to-br from-gray-900/90 to-purple-900/40 rounded-2xl p-6 border border-purple-500/30">
-          <h3 className="text-xl font-bold mb-4">Forge Custom Quest</h3>
-          <form onSubmit={handleAddHabit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-2">Quest Name</label>
-              <input
-                type="text"
-                value={newHabit.title}
-                onChange={(e) => setNewHabit({ ...newHabit, title: e.target.value })}
-                className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:border-purple-500 focus:outline-none"
-                placeholder="Enter your custom quest..."
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-2">Description</label>
-              <textarea
-                value={newHabit.description}
-                onChange={(e) => setNewHabit({ ...newHabit, description: e.target.value })}
-                className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:border-purple-500 focus:outline-none h-20"
-                placeholder="Describe your quest objective..."
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">Category</label>
-                <select
-                  value={newHabit.category}
-                  onChange={(e) => setNewHabit({ ...newHabit, category: e.target.value })}
-                  className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:border-purple-500 focus:outline-none"
-                >
-                  {categories.filter(cat => cat !== 'all').map(cat => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">XP Reward</label>
-                <input
-                  type="number"
-                  value={newHabit.xpReward}
-                  onChange={(e) => setNewHabit({ ...newHabit, xpReward: parseInt(e.target.value) })}
-                  className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:border-purple-500 focus:outline-none"
-                  min="10"
-                  max="100"
-                />
-              </div>
-            </div>
-            <div className="flex space-x-4">
-              <button
-                type="submit"
-                className="bg-gradient-to-r from-green-600 to-emerald-600 px-6 py-2 rounded-lg font-semibold hover:shadow-lg transition-all duration-300"
-              >
-                Forge Quest
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowAddForm(false)}
-                className="bg-gray-700 px-6 py-2 rounded-lg font-semibold hover:bg-gray-600 transition-all duration-300"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* Quests Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredHabits.map(habit => (
-          <div 
-            key={habit.id} 
-            className={`relative overflow-hidden rounded-2xl border backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:shadow-xl ${
-              habit.completed 
-                ? 'bg-gradient-to-br from-green-900/40 to-emerald-900/40 border-green-500/30 hover:shadow-green-500/25' 
-                : 'bg-gradient-to-br from-gray-900/80 to-gray-800/40 border-gray-700/50 hover:shadow-purple-500/25'
-            }`}
-          >
-            {/* Difficulty Badge */}
-            <div className={`absolute top-4 right-4 px-2 py-1 rounded-full text-xs font-bold ${difficultyColors[habit.difficulty]} bg-black/50`}>
-              {habit.difficulty === 'elite' && <Crown size={12} className="inline mr-1" />}
-              {habit.difficulty.toUpperCase()}
-            </div>
-
-            <div className="p-6">
+      <div className="grid gap-6">
+        {habits.map((quest) => {
+          const enhancedQuest = quest as any;
+          const subtasks = enhancedQuest.subtasks || [];
+          const totalPomodoros = enhancedQuest.totalEstimatedPomodoros || quest.xpReward / 10;
+          const followUps = getQuestFollowUps(quest.id);
+          const subtaskProgress = getSubtaskProgress(subtasks);
+          const nextSubtask = getNextIncompleteSubtask(subtasks);
+          
+          return (
+            <div key={quest.id} className={`bg-gradient-to-br ${getCategoryColor(quest.category)} backdrop-blur-sm rounded-xl border p-6`}>
               <div className="flex items-start justify-between mb-4">
-                <div>
-                  <h3 className="font-bold text-lg text-white mb-1">{habit.title}</h3>
-                  <span className={`px-3 py-1 rounded-full text-xs font-medium bg-gradient-to-r ${categoryColors[habit.category as keyof typeof categoryColors]} text-white`}>
-                    {habit.category}
-                  </span>
-                  {habit.description && (
-                    <p className="text-gray-400 text-sm mt-2">{habit.description}</p>
+                <div className="flex-1">
+                  <div className="flex items-center space-x-3 mb-2">
+                    <Crown className="text-yellow-400" size={20} />
+                    <h3 className="text-xl font-bold text-white">{quest.title}</h3>
+                    <span className={`px-2 py-1 text-xs rounded-full border ${getDifficultyColor(quest.difficulty)}`}>
+                      {quest.difficulty}
+                    </span>
+                  </div>
+                  <p className="text-gray-300 text-sm mb-3">{quest.description}</p>
+                  
+                  {/* Quest Stats */}
+                  <div className="flex items-center space-x-4 text-sm">
+                    <div className="flex items-center space-x-1">
+                      <Zap className="text-yellow-400" size={16} />
+                      <span className="text-yellow-400">{quest.xpReward} XP</span>
+                    </div>
+                    <div className="flex items-center space-x-1">
+                      <Clock className="text-purple-400" size={16} />
+                      <span className="text-purple-400">{totalPomodoros} Pomodoros</span>
+                    </div>
+                    <div className="flex items-center space-x-1">
+                      <Calendar className="text-cyan-400" size={16} />
+                      <span className="text-cyan-400">{quest.frequency}</span>
+                    </div>
+                    {subtasks.length > 0 && (
+                      <div className="flex items-center space-x-1">
+                        <ListTodo className="text-green-400" size={16} />
+                        <span className="text-green-400">{getCompletedSubtasks(subtasks)}/{subtasks.length} Tasks</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Subtask Progress Bar */}
+                  {subtasks.length > 0 && (
+                    <div className="mt-3">
+                      <div className="w-full bg-gray-700 rounded-full h-2">
+                        <div 
+                          className="bg-gradient-to-r from-green-500 to-emerald-500 h-2 rounded-full transition-all duration-500"
+                          style={{ width: `${subtaskProgress}%` }}
+                        />
+                      </div>
+                      <div className="text-xs text-gray-400 mt-1">
+                        Progress: {Math.round(subtaskProgress)}% complete
+                      </div>
+                    </div>
                   )}
                 </div>
-                {habit.completed && (
-                  <div className="text-green-400 text-2xl">✓</div>
-                )}
-              </div>
 
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center space-x-4 text-sm">
-                  <div className="flex items-center space-x-1 text-cyan-400">
-                    <Zap size={16} />
-                    <span>{habit.xpReward} XP</span>
-                  </div>
-                  <div className="flex items-center space-x-1 text-orange-400">
-                    <Flame size={16} />
-                    <span>{habit.streak}</span>
-                  </div>
-                  <div className="text-purple-400 text-xs">
-                    {habit.frequency}
-                  </div>
+                <div className="flex flex-col space-y-2">
+                  <button
+                    onClick={() => handleStartQuest(quest.id, totalPomodoros)}
+                    className="flex items-center space-x-2 bg-gradient-to-r from-purple-600 to-cyan-600 px-4 py-2 rounded-lg font-semibold hover:shadow-lg hover:shadow-purple-500/25 transition-all duration-300"
+                  >
+                    <Play size={16} />
+                    <span>Start Quest</span>
+                  </button>
+                  
+                  {canCompleteQuest(enhancedQuest) && (
+                    <button
+                      onClick={() => completeHabit(quest.id)}
+                      disabled={quest.completed}
+                      className="flex items-center space-x-2 bg-gradient-to-r from-green-600 to-emerald-600 px-4 py-2 rounded-lg font-semibold hover:shadow-lg hover:shadow-green-500/25 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <CheckCircle size={16} />
+                      <span>{quest.completed ? 'Completed' : 'Complete'}</span>
+                    </button>
+                  )}
+
+                  {subtasks.length > 0 && (
+                    <button
+                      onClick={() => setExpandedQuest(expandedQuest === quest.id ? null : quest.id)}
+                      className="flex items-center space-x-2 bg-gray-700 px-4 py-2 rounded-lg font-semibold hover:bg-gray-600 transition-all duration-300"
+                    >
+                      <MessageCircle size={16} />
+                      <span>View Details</span>
+                    </button>
+                  )}
                 </div>
               </div>
 
-              {!habit.completed && (
-                <div className="space-y-2">
-                  <button
-                    onClick={() => handleQuestClick(habit)}
-                    className="w-full bg-gradient-to-r from-purple-600 to-cyan-600 py-3 rounded-lg font-semibold hover:shadow-lg hover:shadow-purple-500/25 transition-all duration-300 flex items-center justify-center space-x-2"
-                  >
-                    <Target size={18} />
-                    <span>Start Quest</span>
-                  </button>
-                  <button
-                    onClick={() => completeHabit(habit.id)}
-                    className="w-full bg-gray-700/50 py-2 rounded-lg font-medium text-sm hover:bg-gray-600/50 transition-all duration-300"
-                  >
-                    Mark Complete
-                  </button>
+              {/* Expanded Quest Details */}
+              {expandedQuest === quest.id && subtasks.length > 0 && (
+                <div className="mt-6 border-t border-gray-600 pt-6">
+                  <div className="flex space-x-4 mb-4">
+                    <button
+                      onClick={() => setActiveTab('subtasks')}
+                      className={`px-4 py-2 rounded-lg font-medium transition-all duration-300 ${
+                        activeTab === 'subtasks'
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      }`}
+                    >
+                      Subtasks ({subtasks.length})
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('followup')}
+                      className={`px-4 py-2 rounded-lg font-medium transition-all duration-300 ${
+                        activeTab === 'followup'
+                          ? 'bg-cyan-600 text-white'
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      }`}
+                    >
+                      AI Assistant ({followUps.length})
+                    </button>
+                  </div>
+
+                  {activeTab === 'subtasks' && (
+                    <div className="space-y-3">
+                      <h4 className="text-lg font-semibold text-white mb-3">Quest Journey</h4>
+                      {nextSubtask && (
+                        <div className="bg-gradient-to-r from-blue-900/40 to-purple-900/40 rounded-lg p-4 border border-blue-500/30">
+                          <div className="flex items-center space-x-2 mb-2">
+                            <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
+                            <span className="text-blue-300 font-medium">Current Task</span>
+                          </div>
+                          <h5 className="text-white font-semibold">{nextSubtask.title}</h5>
+                          <p className="text-gray-300 text-sm mt-1">{nextSubtask.description}</p>
+                          <div className="flex items-center justify-between mt-3">
+                            <span className="text-xs text-blue-400">
+                              {nextSubtask.estimatedPomodoros} Pomodoros estimated
+                            </span>
+                            <button
+                              onClick={() => handleCompleteSubtask(quest.id, nextSubtask.id)}
+                              className="bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded text-sm font-medium transition-colors"
+                            >
+                              Mark Complete
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      
+                      <div className="space-y-2">
+                        {subtasks.map((subtask, index) => (
+                          <div
+                            key={subtask.id}
+                            className={`p-3 rounded-lg border ${
+                              subtask.isCompleted
+                                ? 'bg-green-900/20 border-green-500/30'
+                                : subtask.id === nextSubtask?.id
+                                ? 'bg-blue-900/20 border-blue-500/30'
+                                : 'bg-gray-800/50 border-gray-600/30'
+                            }`}
+                          >
+                            <div className="flex items-center space-x-3">
+                              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                                subtask.isCompleted
+                                  ? 'bg-green-500 text-white'
+                                  : subtask.id === nextSubtask?.id
+                                  ? 'bg-blue-500 text-white'
+                                  : 'bg-gray-600 text-gray-300'
+                              }`}>
+                                {subtask.isCompleted ? '✓' : index + 1}
+                              </div>
+                              <div className="flex-1">
+                                <h6 className={`font-medium ${
+                                  subtask.isCompleted ? 'text-green-300 line-through' : 'text-white'
+                                }`}>
+                                  {subtask.title}
+                                </h6>
+                                <p className={`text-sm ${
+                                  subtask.isCompleted ? 'text-green-400/70' : 'text-gray-400'
+                                }`}>
+                                  {subtask.description}
+                                </p>
+                              </div>
+                              <span className="text-xs text-gray-500">
+                                {subtask.estimatedPomodoros}p
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {activeTab === 'followup' && (
+                    <QuestFollowUpTab
+                      questTitle={quest.title}
+                      category={quest.category}
+                      subtasks={subtasks}
+                      followUps={followUps}
+                      onAddFollowUp={(followUp) => addQuestFollowUp(quest.id, followUp)}
+                    />
+                  )}
                 </div>
               )}
             </div>
-          </div>
-        ))}
-        
-        {filteredHabits.length === 0 && (
-          <div className="col-span-full text-center py-12">
-            <p className="text-gray-400 text-lg">No quests available for this category.</p>
-            <p className="text-gray-500 text-sm mt-2">Try adding a custom quest or check suggestions!</p>
-          </div>
-        )}
+          );
+        })}
       </div>
+
+      {habits.length === 0 && (
+        <div className="text-center py-12">
+          <Crown className="mx-auto mb-4 text-gray-500" size={48} />
+          <h3 className="text-xl font-semibold text-gray-400 mb-2">No Active Quests</h3>
+          <p className="text-gray-500">Complete the onboarding to generate your first quests!</p>
+        </div>
+      )}
     </div>
   );
 };
