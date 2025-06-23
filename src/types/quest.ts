@@ -23,20 +23,6 @@ export interface EnhancedQuestTemplate {
   isCustom?: boolean;
 }
 
-export interface QuestTemplate {
-  id: string;
-  title: string;
-  category: string;
-  xpReward: number;
-  frequency: 'daily' | 'weekly' | 'milestone';
-  difficulty: 'basic' | 'intermediate' | 'elite';
-  description: string;
-  tier: number;
-  subtasks?: QuestSubtask[];
-  totalEstimatedPomodoros?: number;
-  isCustom?: boolean;
-}
-
 export interface QuestFollowUp {
   questId: string;
   subtaskId: string;

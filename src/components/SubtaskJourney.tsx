@@ -5,23 +5,21 @@ import { QuestSubtask } from '../types/quest';
 
 interface SubtaskJourneyProps {
   subtasks: QuestSubtask[];
-  currentSubtaskIndex?: number;
-  onCompleteSubtask?: (subtaskId: string) => void;
-  showCompletionButtons?: boolean;
+  currentSubtaskIndex: number;
+  onSubtaskComplete: (subtaskId: string) => void;
 }
 
 const SubtaskJourney: React.FC<SubtaskJourneyProps> = ({
   subtasks,
-  currentSubtaskIndex = 0,
-  onCompleteSubtask,
-  showCompletionButtons = false
+  currentSubtaskIndex,
+  onSubtaskComplete
 }) => {
   const currentSubtask = subtasks[currentSubtaskIndex];
 
   return (
     <div className="space-y-6">
       {/* Current Subtask Focus */}
-      {currentSubtask && !currentSubtask.isCompleted && (
+      {currentSubtask && (
         <div className="bg-gradient-to-br from-blue-900/40 to-purple-900/40 rounded-xl p-6 border border-blue-500/30">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-xl font-bold text-blue-300">Current Focus</h3>
@@ -34,15 +32,13 @@ const SubtaskJourney: React.FC<SubtaskJourneyProps> = ({
           <h4 className="text-lg font-semibold text-white mb-2">{currentSubtask.title}</h4>
           <p className="text-gray-300 mb-4">{currentSubtask.description}</p>
           
-          {showCompletionButtons && onCompleteSubtask && (
-            <button
-              onClick={() => onCompleteSubtask(currentSubtask.id)}
-              className="bg-gradient-to-r from-green-600 to-emerald-600 px-4 py-2 rounded-lg font-semibold hover:shadow-lg hover:shadow-green-500/25 transition-all duration-300 flex items-center space-x-2"
-            >
-              <CheckCircle size={18} />
-              <span>Mark Complete</span>
-            </button>
-          )}
+          <button
+            onClick={() => onSubtaskComplete(currentSubtask.id)}
+            className="bg-gradient-to-r from-green-600 to-emerald-600 px-4 py-2 rounded-lg font-semibold hover:shadow-lg hover:shadow-green-500/25 transition-all duration-300 flex items-center space-x-2"
+          >
+            <CheckCircle size={18} />
+            <span>Mark Complete</span>
+          </button>
         </div>
       )}
 
@@ -115,16 +111,6 @@ const SubtaskJourney: React.FC<SubtaskJourneyProps> = ({
                     <Circle className="text-gray-600" size={20} />
                   )}
                 </div>
-
-                {/* Action button for incomplete subtasks */}
-                {showCompletionButtons && onCompleteSubtask && !isCompleted && (
-                  <button
-                    onClick={() => onCompleteSubtask(subtask.id)}
-                    className="bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded text-sm font-medium transition-colors"
-                  >
-                    Complete
-                  </button>
-                )}
 
                 {/* Connecting line */}
                 {index < subtasks.length - 1 && (

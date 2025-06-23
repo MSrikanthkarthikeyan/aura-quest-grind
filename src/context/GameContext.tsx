@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useRef } from 'r
 import { questTemplates, getQuestsForRoles, QuestTemplate } from '../utils/questTemplates';
 import { useAuth } from './AuthContext';
 import { firebaseDataService } from '../services/firebaseDataService';
-import { QuestSubtask, QuestFollowUp, EnhancedQuestTemplate } from '../types/quest';
+import { QuestSubtask, QuestFollowUp } from '../types/quest';
 
 interface Character {
   name: string;
@@ -76,7 +76,7 @@ interface GameContextType {
   generateQuestsFromRoles: () => void;
   toggleHabit: (habitId: string, enabled: boolean) => void;
   removeHabit: (habitId: string) => void;
-  getSuggestedQuests: () => EnhancedQuestTemplate[];
+  getSuggestedQuests: () => QuestTemplate[];
   startQuestSession: (questId: string, pomodoroCount: number) => void;
   completeQuestSession: () => void;
   getDailyActivity: (date: string) => DailyActivity;
@@ -378,57 +378,34 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       maxStreak
     );
 
-    // Convert quest templates to enhanced habits with subtasks
+    // Convert quest templates to habits, avoiding duplicates
     const existingQuestIds = habits.map(h => h.id);
     const newHabits = availableQuests
       .filter(quest => !existingQuestIds.includes(quest.id))
-      .map(quest => {
-        // Generate basic subtasks for template quests
-        const basicSubtasks = quest.subtasks?.map((subtask, index) => ({
-          id: `${quest.id}-subtask-${index}`,
-          title: subtask.title,
-          description: subtask.description,
-          estimatedPomodoros: subtask.estimatedPomodoros,
-          isCompleted: false,
-          resources: subtask.resources || [],
-          followUpQueries: subtask.followUpQueries || []
-        })) || [];
-
-        const enhancedHabit: EnhancedHabit = {
-          id: quest.id,
-          title: quest.title,
-          category: quest.category,
-          xpReward: quest.xpReward,
-          streak: 0,
-          completed: false,
-          frequency: quest.frequency,
-          difficulty: quest.difficulty,
-          description: quest.description,
-          tier: quest.tier,
-          isCustom: false,
-          subtasks: basicSubtasks,
-          totalEstimatedPomodoros: quest.totalEstimatedPomodoros || basicSubtasks.reduce((sum, st) => sum + st.estimatedPomodoros, 0),
-          currentSubtaskIndex: 0,
-          followUps: []
-        };
-
-        return enhancedHabit;
-      });
+      .map(quest => ({
+        id: quest.id,
+        title: quest.title,
+        category: quest.category,
+        xpReward: quest.xpReward,
+        streak: 0,
+        completed: false,
+        frequency: quest.frequency,
+        difficulty: quest.difficulty,
+        description: quest.description,
+        tier: quest.tier,
+        isCustom: false,
+      }));
 
     setHabits(prev => [...prev, ...newHabits]);
   };
 
   const addHabit = (habitData: Omit<Habit, 'id' | 'streak' | 'completed'>) => {
-    const newHabit: EnhancedHabit = {
+    const newHabit: Habit = {
       ...habitData,
       id: Date.now().toString(),
       streak: 0,
       completed: false,
       isCustom: true,
-      subtasks: (habitData as any).subtasks || [],
-      totalEstimatedPomodoros: (habitData as any).totalEstimatedPomodoros || habitData.xpReward / 10,
-      currentSubtaskIndex: 0,
-      followUps: (habitData as any).followUps || []
     };
     setHabits(prev => [...prev, newHabit]);
   };
@@ -465,27 +442,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Check for achievements
           checkAchievements(newStreak);
           
-          // Record daily activity
-          const today = new Date().toISOString().split('T')[0];
-          setDailyActivities(prevActivities => {
-            const existing = prevActivities.find(a => a.date === today);
-            if (existing) {
-              return prevActivities.map(a => a.date === today ? {
-                ...a,
-                questsCompleted: a.questsCompleted + 1,
-                xpEarned: a.xpEarned + habit.xpReward
-              } : a);
-            } else {
-              return [...prevActivities, {
-                date: today,
-                questsCompleted: 1,
-                pomodorosCompleted: 0,
-                xpEarned: habit.xpReward,
-                hasLogin: true
-              }];
-            }
-          });
-          
           updatedHabit = {
             ...updatedHabit,
             completed: true,
@@ -519,9 +475,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             subtasks: updatedSubtasks,
             currentSubtaskIndex: nextIncompleteIndex === -1 ? updatedSubtasks.length - 1 : nextIncompleteIndex
           };
-          
-          // Give small XP for completing subtask
-          gainXP(10, getCategoryStatType(habit.category));
           
           // If all subtasks are completed, allow quest completion
           if (nextIncompleteIndex === -1) {
@@ -572,7 +525,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }));
   };
 
-  const getSuggestedQuests = (): EnhancedQuestTemplate[] => {
+  const getSuggestedQuests = (): QuestTemplate[] => {
     if (!userRoles) return [];
     
     const maxStreak = Math.max(...habits.map(h => h.streak), 0);

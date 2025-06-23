@@ -1,13 +1,10 @@
-
 import React, { useState, useEffect } from 'react';
 import { useGame } from '../context/GameContext';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Play, Pause, Square, Timer, CheckCircle, Target, ArrowRight, ListTodo } from 'lucide-react';
-import { QuestSubtask } from '../types/quest';
-import SubtaskJourney from './SubtaskJourney';
+import { Play, Pause, Square, Timer, CheckCircle, Target } from 'lucide-react';
 
 const PomodoroTimer = () => {
-  const { gainXP, currentQuestSession, completeQuestSession, habits, completeSubtask } = useGame();
+  const { gainXP, currentQuestSession, completeQuestSession, habits } = useGame();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   
@@ -20,13 +17,8 @@ const PomodoroTimer = () => {
   const [sessions, setSessions] = useState(0);
   const [totalPomodoros] = useState(initialPomodoros);
   const [questCompleted, setQuestCompleted] = useState(false);
-  const [showJourney, setShowJourney] = useState(false);
 
   const currentQuest = questId ? habits.find(h => h.id === questId) : null;
-  const enhancedQuest = currentQuest as any;
-  const subtasks = enhancedQuest?.subtasks || [];
-  const currentSubtask = subtasks.find((st: QuestSubtask) => !st.isCompleted);
-  const completedSubtasks = subtasks.filter((st: QuestSubtask) => st.isCompleted).length;
 
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
@@ -73,12 +65,6 @@ const PomodoroTimer = () => {
     }
   };
 
-  const handleSubtaskComplete = (subtaskId: string) => {
-    if (questId) {
-      completeSubtask(questId, subtaskId);
-    }
-  };
-
   const handleReturnToQuests = () => {
     navigate('/habits');
   };
@@ -101,7 +87,6 @@ const PomodoroTimer = () => {
 
   const progress = ((isBreak ? 5 * 60 : 25 * 60) - time) / (isBreak ? 5 * 60 : 25 * 60) * 100;
   const questProgress = (sessions / totalPomodoros) * 100;
-  const subtaskProgress = subtasks.length > 0 ? (completedSubtasks / subtasks.length) * 100 : 0;
 
   return (
     <div className="p-8 space-y-8">
@@ -131,89 +116,6 @@ const PomodoroTimer = () => {
             <div className="flex items-center justify-between text-sm">
               <span className="text-cyan-400">{currentQuest.category}</span>
               <span className="text-yellow-400">{currentQuest.xpReward} XP</span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Current Subtask Display */}
-      {currentSubtask && (
-        <div className="max-w-2xl mx-auto">
-          <div className="bg-gradient-to-br from-blue-900/40 to-purple-900/40 rounded-xl p-4 border border-blue-500/30">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center space-x-2">
-                <Target className="text-blue-400" size={20} />
-                <span className="text-blue-300 font-medium">Current Focus</span>
-              </div>
-              <span className="text-xs text-gray-400">
-                {completedSubtasks + 1}/{subtasks.length}
-              </span>
-            </div>
-            <h3 className="text-white font-semibold mb-1">{currentSubtask.title}</h3>
-            <p className="text-gray-300 text-sm mb-3">{currentSubtask.description}</p>
-            <div className="flex items-center justify-between">
-              <span className="text-blue-400 text-sm">
-                Est. {currentSubtask.estimatedPomodoros} Pomodoros
-              </span>
-              <button
-                onClick={() => handleSubtaskComplete(currentSubtask.id)}
-                className="bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded text-sm font-medium transition-colors"
-              >
-                Mark Complete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Subtask Progress */}
-      {subtasks.length > 0 && (
-        <div className="max-w-2xl mx-auto">
-          <div className="bg-gradient-to-br from-gray-900/80 to-green-900/30 rounded-xl p-4 border border-green-500/30">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-green-300 font-medium">Task Journey</span>
-              <button
-                onClick={() => setShowJourney(!showJourney)}
-                className="text-green-400 hover:text-green-300 text-sm font-medium flex items-center space-x-1"
-              >
-                <ListTodo size={16} />
-                <span>{showJourney ? 'Hide' : 'Show'} All Tasks</span>
-              </button>
-            </div>
-            <div className="w-full bg-gray-700 rounded-full h-2 mb-2">
-              <div 
-                className="bg-gradient-to-r from-green-500 to-emerald-500 h-2 rounded-full transition-all duration-500"
-                style={{ width: `${subtaskProgress}%` }}
-              />
-            </div>
-            <div className="text-sm text-green-400">
-              {completedSubtasks}/{subtasks.length} tasks completed ({Math.round(subtaskProgress)}%)
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Subtask Journey Modal */}
-      {showJourney && subtasks.length > 0 && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-gradient-to-br from-gray-900/95 to-purple-900/50 rounded-2xl border border-purple-500/30 max-w-2xl w-full max-h-[80vh] overflow-hidden">
-            <div className="p-6 border-b border-gray-700">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-bold text-white">Quest Journey</h2>
-                <button
-                  onClick={() => setShowJourney(false)}
-                  className="text-gray-400 hover:text-white"
-                >
-                  ✕
-                </button>
-              </div>
-            </div>
-            <div className="p-6 overflow-y-auto max-h-[60vh]">
-              <SubtaskJourney
-                subtasks={subtasks}
-                onCompleteSubtask={handleSubtaskComplete}
-                showCompletionButtons={true}
-              />
             </div>
           </div>
         </div>
