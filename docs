@@ -1,0 +1,94 @@
+# 📚 Documentation – Aura Quest Grind
+
+Welcome to the **documentation hub** for Aura Quest Grind – your gamified productivity assistant enhanced by AI.
+
+---
+
+## 🔌 API Overview
+
+Our backend is powered by **MongoDB Atlas** and supports RESTful endpoints to manage:
+
+- 🧠 AI-generated Quests
+- ⏱️ Pomodoro Tracking
+- 🎯 Goal & Habit Logs
+- 🧾 User Profiles & Preferences
+
+---
+
+## 🛣️ Routes Summary
+
+| Method | Endpoint            | Description                          |
+|--------|---------------------|--------------------------------------|
+| GET    | /api/quests         | Get all quests                       |
+| POST   | /api/quests         | Create new quest                     |
+| GET    | /api/quests/:id     | Get specific quest                   |
+| PUT    | /api/quests/:id     | Update a quest                       |
+| DELETE | /api/quests/:id     | Delete a quest                       |
+| POST   | /api/pomodoro/start | Start a pomodoro for a subtask       |
+| POST   | /api/prefs          | Save user preferences from onboarding|
+
+---
+
+## 🧠 AI Quest Logic
+
+> The AI system reads user input (max 5 prompts during onboarding) to:
+- Tag user interests
+- Generate initial Quests
+- Estimate Pomodoro durations per subtask
+- Recommend resources if "Follow up with AI" is triggered
+
+---
+
+## 🗃️ Data Models (MongoDB)
+
+### 🎮 Quest
+
+```json
+{
+  "title": "Build AI Chatbot",
+  "subtasks": [
+    {
+      "title": "Design conversation flow",
+      "pomodoros": 3,
+      "resources": ["https://chatbotguide.ai"]
+    }
+  ],
+  "userId": "ObjectId",
+  "status": "in-progress"
+}
+```
+
+### 👤 User
+
+```json
+{
+  "name": "Srikanth",
+  "interests": ["WebDev", "AI", "Productivity"],
+  "onboarded": true
+}
+```
+
+---
+
+## 🧩 Architecture
+
+```
+Frontend (Vite + React + Tailwind)
+      ↓
+Express.js API Server (Node.js)
+      ↓
+MongoDB Atlas (cloud database)
+      ↓
+AI Integration (Gemini API)
+```
+
+---
+
+## 📈 Future Enhancements
+
+- OAuth login
+- Real-time Pomodoro sync
+- Notification reminders
+- AI Quest leaderboard
+
+---
