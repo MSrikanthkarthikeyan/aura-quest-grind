@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useRef } from 'r
 import { questTemplates, getQuestsForRoles, QuestTemplate } from '../utils/questTemplates';
 import { useAuth } from './AuthContext';
 import { firebaseDataService } from '../services/firebaseDataService';
-import { QuestSubtask, QuestFollowUp } from '../types/quest';
+import { QuestSubtask, QuestFollowUp, EnhancedQuestTemplate } from '../types/quest';
 
 interface Character {
   name: string;
@@ -76,7 +76,7 @@ interface GameContextType {
   generateQuestsFromRoles: () => void;
   toggleHabit: (habitId: string, enabled: boolean) => void;
   removeHabit: (habitId: string) => void;
-  getSuggestedQuests: () => QuestTemplate[];
+  getSuggestedQuests: () => EnhancedQuestTemplate[];
   startQuestSession: (questId: string, pomodoroCount: number) => void;
   completeQuestSession: () => void;
   getDailyActivity: (date: string) => DailyActivity;
@@ -525,7 +525,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }));
   };
 
-  const getSuggestedQuests = (): QuestTemplate[] => {
+  const getSuggestedQuests = (): EnhancedQuestTemplate[] => {
     if (!userRoles) return [];
     
     const maxStreak = Math.max(...habits.map(h => h.streak), 0);
@@ -537,7 +537,14 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
     
     const currentQuestIds = habits.map(h => h.id);
-    return allAvailableQuests.filter(quest => !currentQuestIds.includes(quest.id));
+    const filteredQuests = allAvailableQuests.filter(quest => !currentQuestIds.includes(quest.id));
+    
+    // Convert QuestTemplate to EnhancedQuestTemplate
+    return filteredQuests.map(quest => ({
+      ...quest,
+      subtasks: [],
+      totalEstimatedPomodoros: 1
+    }));
   };
 
   const getCategoryStatType = (category: string): string => {
