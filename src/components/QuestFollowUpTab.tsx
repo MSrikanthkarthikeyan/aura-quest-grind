@@ -63,6 +63,16 @@ const QuestFollowUpTab: React.FC<QuestFollowUpTabProps> = ({
     return followUps.filter(f => f.subtaskId === subtaskId);
   };
 
+  const formatTimestamp = (timestamp: string) => {
+    try {
+      const date = new Date(timestamp);
+      return date.toLocaleDateString();
+    } catch (error) {
+      console.error('Error formatting timestamp:', error);
+      return 'Invalid date';
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Query Section */}
@@ -130,7 +140,7 @@ const QuestFollowUpTab: React.FC<QuestFollowUpTabProps> = ({
                         <span className="text-sm font-medium text-purple-300">Your Question:</span>
                       </div>
                       <span className="text-xs text-gray-400">
-                        {new Date(followUp.timestamp).toLocaleDateString()}
+                        {formatTimestamp(followUp.timestamp)}
                       </span>
                     </div>
                     
