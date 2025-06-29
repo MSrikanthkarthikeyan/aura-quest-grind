@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/SupabaseAuthContext';
 import { X, Eye, EyeOff, Mail, Lock, User } from 'lucide-react';
 
 interface AuthModalProps {

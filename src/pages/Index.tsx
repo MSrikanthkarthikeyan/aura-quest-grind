@@ -2,7 +2,7 @@
 import React, { useState, Suspense, lazy } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { useGame } from '../context/GameContext';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/SupabaseAuthContext';
 import { User, LogOut } from 'lucide-react';
 import LoadingWrapper from '../components/LoadingWrapper';
 import { DashboardSkeleton, QuestBoardSkeleton, PomodoroSkeleton } from '../components/ui/loading-skeleton';
@@ -101,7 +101,7 @@ const Index = () => {
         {/* User info and logout button - Mobile optimized */}
         <div className="absolute top-2 md:top-4 right-2 md:right-4 z-50 flex items-center space-x-2 md:space-x-4">
           <span className="text-purple-300 text-sm md:text-base hidden sm:block">
-            Welcome, {user.displayName || user.email}
+            Welcome, {user.user_metadata?.display_name || user.email}
           </span>
           <button
             onClick={signOut}

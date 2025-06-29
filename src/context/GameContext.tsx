@@ -1,8 +1,7 @@
-
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { questTemplates, getQuestsForRoles, QuestTemplate } from '../utils/questTemplates';
-import { useAuth } from './AuthContext';
-import { firebaseDataService } from '../services/firebaseDataService';
+import { useAuth } from './SupabaseAuthContext';
+import { supabaseDataService } from '../services/supabaseDataService';
 import { cacheService } from '../services/cacheService';
 import { QuestSubtask, QuestFollowUp, EnhancedQuestTemplate } from '../types/quest';
 
@@ -197,15 +196,15 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     syncTimeoutRef.current = setTimeout(() => {
       if (isSyncEnabled && user) {
-        syncToFirebase();
+        syncToSupabase();
       }
     }, 1000);
   }, [isSyncEnabled, user]);
 
-  // Enhanced Firebase sync effect with caching
+  // Enhanced Supabase sync effect with caching
   useEffect(() => {
     if (user && isSyncEnabled) {
-      console.log('Setting up Firebase sync for user:', user.uid);
+      console.log('Setting up Supabase sync for user:', user.id);
       
       // Check if we have cached data first
       const hasCachedData = cacheService.hasCache('gameData');
@@ -213,15 +212,15 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setIsInitialLoading(true);
       }
       
-      // Load data from Firebase when user logs in
-      loadFromFirebase().finally(() => {
+      // Load data from Supabase when user logs in
+      loadFromSupabase().finally(() => {
         setIsInitialLoading(false);
       });
       
       // Set up real-time listener with reduced frequency
-      const unsubscribe = firebaseDataService.subscribeToGameData(user.uid, (data) => {
+      const unsubscribe = supabaseDataService.subscribeToGameData((data) => {
         if (data && isSyncEnabled) {
-          console.log('Received Firebase update, applying changes...');
+          console.log('Received Supabase update, applying changes...');
           
           // Cache the received data
           cacheService.set('gameData', data, 10 * 60 * 1000); // 10 minutes
@@ -251,7 +250,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       return () => {
-        console.log('Cleaning up Firebase sync');
+        console.log('Cleaning up Supabase sync');
         unsubscribe();
       };
     } else {
@@ -259,7 +258,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [user, isSyncEnabled]);
 
-  const loadFromFirebase = async () => {
+  const loadFromSupabase = async () => {
     if (!user) return;
     
     try {
@@ -277,7 +276,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (cachedData.dailyActivities) setDailyActivities(cachedData.dailyActivities);
         
         // Still fetch fresh data in background
-        firebaseDataService.loadGameData(user.uid).then(data => {
+        supabaseDataService.loadGameData().then(data => {
           if (data) {
             cacheService.set('gameData', data);
           }
@@ -286,7 +285,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
       
-      const data = await firebaseDataService.loadGameData(user.uid);
+      const data = await supabaseDataService.loadGameData();
       if (data) {
         // Cache the loaded data
         cacheService.set('gameData', data);
@@ -301,15 +300,15 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (data.dailyActivities) setDailyActivities(data.dailyActivities);
       }
     } catch (error) {
-      console.error('Error loading data from Firebase:', error);
+      console.error('Error loading data from Supabase:', error);
     }
   };
 
-  const syncToFirebase = async () => {
+  const syncToSupabase = async () => {
     if (!user || !isSyncEnabled) return;
 
     try {
-      console.log('Syncing to Firebase...');
+      console.log('Syncing to Supabase...');
       const gameData = {
         character,
         habits,
@@ -318,13 +317,13 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         dailyActivities
       };
       
-      await firebaseDataService.saveGameData(user.uid, gameData);
+      await supabaseDataService.saveGameData(gameData);
       
       // Update cache
       cacheService.set('gameData', gameData);
-      console.log('Firebase sync completed');
+      console.log('Supabase sync completed');
     } catch (error) {
-      console.error('Error syncing to Firebase:', error);
+      console.error('Error syncing to Supabase:', error);
     }
   };
 
@@ -338,7 +337,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (userRoles) cacheService.set('userRoles', userRoles);
       cacheService.set('dailyActivities', dailyActivities);
       
-      // Debounced sync to Firebase
+      // Debounced sync to Supabase
       debouncedSync({ character, habits, achievements, userRoles, dailyActivities });
     }
   }, [character, habits, achievements, userRoles, dailyActivities, user, isSyncEnabled, isInitialLoading, debouncedSync]);
@@ -446,7 +445,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     
     // Re-enable sync after onboarding
     setTimeout(() => {
-      console.log('Re-enabling Firebase sync after onboarding');
+      console.log('Re-enabling Supabase sync after onboarding');
       setIsSyncEnabled(true);
     }, 2000);
   };
@@ -681,9 +680,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const startQuestSession = (questId: string, pomodoroCount: number) => {
     setCurrentQuestSession({ questId, pomodoroCount });
     
-    // Save quest session to Firebase
+    // Save quest session to Supabase
     if (user) {
-      firebaseDataService.saveQuestSession(user.uid, {
+      supabaseDataService.saveQuestSession({
         questId,
         pomodoroCount,
         startedAt: new Date().toISOString()
@@ -724,44 +723,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Optimized auto-sync with debouncing and caching
-  useEffect(() => {
-    if (user && isSyncEnabled && !isInitialLoading) {
-      // Cache locally immediately
-      cacheService.set('character', character);
-      cacheService.set('habits', habits);
-      cacheService.set('achievements', achievements);
-      if (userRoles) cacheService.set('userRoles', userRoles);
-      cacheService.set('dailyActivities', dailyActivities);
-      
-      // Debounced sync to Firebase
-      debouncedSync({ character, habits, achievements, userRoles, dailyActivities });
-    }
-  }, [character, habits, achievements, userRoles, dailyActivities, user, isSyncEnabled, isInitialLoading, debouncedSync]);
-
-  // Save to localStorage whenever state changes
-  useEffect(() => {
-    localStorage.setItem('character', JSON.stringify(character));
-  }, [character]);
-
-  useEffect(() => {
-    if (userRoles) {
-      localStorage.setItem('userRoles', JSON.stringify(userRoles));
-    }
-  }, [userRoles]);
-
-  useEffect(() => {
-    localStorage.setItem('habits', JSON.stringify(habits));
-  }, [habits]);
-
-  useEffect(() => {
-    localStorage.setItem('achievements', JSON.stringify(achievements));
-  }, [achievements]);
-
-  useEffect(() => {
-    localStorage.setItem('dailyActivities', JSON.stringify(dailyActivities));
-  }, [dailyActivities]);
-
   return (
     <GameContext.Provider value={{
       character,
@@ -783,7 +744,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       getDailyActivity,
       getStreakCount,
       recordDailyLogin,
-      syncToFirebase,
+      syncToFirebase: syncToSupabase,
       completeSubtask,
       addQuestFollowUp,
       getQuestFollowUps,
