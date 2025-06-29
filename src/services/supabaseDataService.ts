@@ -1,6 +1,5 @@
 
 import { supabase } from '../integrations/supabase/client';
-import type { Database } from '../integrations/supabase/types';
 
 interface GameData {
   character: any;
@@ -44,7 +43,7 @@ export const supabaseDataService = {
           user_roles: gameData.userRoles,
           daily_activities: gameData.dailyActivities,
           updated_at: new Date().toISOString()
-        })
+        } as any)
         .select();
 
       if (error) throw error;
@@ -63,6 +62,7 @@ export const supabaseDataService = {
       const { data, error } = await supabase
         .from('game_data')
         .select('*')
+        .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
         .single();
 
       if (error) {
@@ -75,11 +75,11 @@ export const supabaseDataService = {
 
       console.log('Game data loaded successfully');
       return {
-        character: data.character,
-        habits: data.habits || [],
-        achievements: data.achievements || [],
-        userRoles: data.user_roles,
-        dailyActivities: data.daily_activities || []
+        character: (data as any).character,
+        habits: (data as any).habits || [],
+        achievements: (data as any).achievements || [],
+        userRoles: (data as any).user_roles,
+        dailyActivities: (data as any).daily_activities || []
       };
     } catch (error) {
       console.error('Error loading game data:', error);
@@ -103,7 +103,7 @@ export const supabaseDataService = {
           fitness_preferences: profile.fitnessPreferences,
           skill_level: profile.skillLevel,
           updated_at: new Date().toISOString()
-        })
+        } as any)
         .select();
 
       if (error) throw error;
@@ -130,7 +130,7 @@ export const supabaseDataService = {
           time_commitment: profile.dailyCommitment,
           skill_level: profile.skillLevel,
           updated_at: new Date().toISOString()
-        })
+        } as any)
         .select();
 
       if (error) throw error;
@@ -152,7 +152,7 @@ export const supabaseDataService = {
           user_id: (await supabase.auth.getUser()).data.user?.id,
           quests: quests,
           updated_at: new Date().toISOString()
-        })
+        } as any)
         .select();
 
       if (error) throw error;
@@ -171,6 +171,7 @@ export const supabaseDataService = {
       const { data, error } = await supabase
         .from('user_onboarding_profiles')
         .select('*')
+        .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
         .single();
 
       if (error) {
@@ -183,13 +184,13 @@ export const supabaseDataService = {
 
       console.log('User profile retrieved successfully');
       return {
-        interests: data.interests || [],
-        goals: data.goals || '',
-        routine: data.routine || '',
-        questStyle: data.quest_style || '',
-        timeCommitment: data.time_commitment || '',
-        fitnessPreferences: data.fitness_preferences || [],
-        skillLevel: data.skill_level || ''
+        interests: (data as any).interests || [],
+        goals: (data as any).goals || '',
+        routine: (data as any).routine || '',
+        questStyle: (data as any).quest_style || '',
+        timeCommitment: (data as any).time_commitment || '',
+        fitnessPreferences: (data as any).fitness_preferences || [],
+        skillLevel: (data as any).skill_level || ''
       };
     } catch (error) {
       console.error('Error getting user profile:', error);
@@ -215,11 +216,11 @@ export const supabaseDataService = {
           
           if (payload.new) {
             const gameData: GameData = {
-              character: payload.new.character,
-              habits: payload.new.habits || [],
-              achievements: payload.new.achievements || [],
-              userRoles: payload.new.user_roles,
-              dailyActivities: payload.new.daily_activities || []
+              character: (payload.new as any).character,
+              habits: (payload.new as any).habits || [],
+              achievements: (payload.new as any).achievements || [],
+              userRoles: (payload.new as any).user_roles,
+              dailyActivities: (payload.new as any).daily_activities || []
             };
             callback(gameData);
           }
@@ -246,7 +247,7 @@ export const supabaseDataService = {
           pomodoros_completed: activity.pomodorosCompleted,
           xp_earned: activity.xpEarned,
           has_login: activity.hasLogin
-        })
+        } as any)
         .select();
 
       if (error) throw error;
@@ -269,7 +270,7 @@ export const supabaseDataService = {
           quest_id: questSession.questId,
           pomodoro_count: questSession.pomodoroCount,
           started_at: questSession.startedAt || new Date().toISOString()
-        })
+        } as any)
         .select();
 
       if (error) throw error;
@@ -288,6 +289,7 @@ export const supabaseDataService = {
       const { data, error } = await supabase
         .from('daily_activities')
         .select('*')
+        .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
         .gte('date', startDate)
         .lte('date', endDate)
         .order('date', { ascending: true });

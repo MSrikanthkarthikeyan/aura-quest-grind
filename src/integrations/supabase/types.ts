@@ -48,6 +48,99 @@ export type Database = {
           },
         ]
       }
+      daily_activities: {
+        Row: {
+          created_at: string
+          date: string
+          has_login: boolean | null
+          id: string
+          pomodoros_completed: number | null
+          quests_completed: number | null
+          user_id: string
+          xp_earned: number | null
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          has_login?: boolean | null
+          id?: string
+          pomodoros_completed?: number | null
+          quests_completed?: number | null
+          user_id: string
+          xp_earned?: number | null
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          has_login?: boolean | null
+          id?: string
+          pomodoros_completed?: number | null
+          quests_completed?: number | null
+          user_id?: string
+          xp_earned?: number | null
+        }
+        Relationships: []
+      }
+      game_data: {
+        Row: {
+          achievements: Json | null
+          character: Json | null
+          created_at: string
+          daily_activities: Json | null
+          habits: Json | null
+          id: string
+          updated_at: string
+          user_id: string
+          user_roles: Json | null
+        }
+        Insert: {
+          achievements?: Json | null
+          character?: Json | null
+          created_at?: string
+          daily_activities?: Json | null
+          habits?: Json | null
+          id?: string
+          updated_at?: string
+          user_id: string
+          user_roles?: Json | null
+        }
+        Update: {
+          achievements?: Json | null
+          character?: Json | null
+          created_at?: string
+          daily_activities?: Json | null
+          habits?: Json | null
+          id?: string
+          updated_at?: string
+          user_id?: string
+          user_roles?: Json | null
+        }
+        Relationships: []
+      }
+      generated_quests: {
+        Row: {
+          created_at: string
+          id: string
+          quests: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          quests: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          quests?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       likes: {
         Row: {
           created_at: string | null
@@ -143,6 +236,75 @@ export type Database = {
           full_name?: string | null
           id?: string
           username?: string | null
+        }
+        Relationships: []
+      }
+      quest_sessions: {
+        Row: {
+          created_at: string
+          id: string
+          pomodoro_count: number
+          quest_id: string
+          started_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          pomodoro_count: number
+          quest_id: string
+          started_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          pomodoro_count?: number
+          quest_id?: string
+          started_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_onboarding_profiles: {
+        Row: {
+          created_at: string
+          fitness_preferences: string[] | null
+          goals: string | null
+          id: string
+          interests: string[] | null
+          quest_style: string | null
+          routine: string | null
+          skill_level: string | null
+          time_commitment: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          fitness_preferences?: string[] | null
+          goals?: string | null
+          id?: string
+          interests?: string[] | null
+          quest_style?: string | null
+          routine?: string | null
+          skill_level?: string | null
+          time_commitment?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          fitness_preferences?: string[] | null
+          goals?: string | null
+          id?: string
+          interests?: string[] | null
+          quest_style?: string | null
+          routine?: string | null
+          skill_level?: string | null
+          time_commitment?: string | null
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
