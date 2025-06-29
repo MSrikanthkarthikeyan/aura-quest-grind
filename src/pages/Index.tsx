@@ -79,9 +79,11 @@ const Index = () => {
 
   if (!hasCompletedOnboarding) {
     return (
-      <Suspense fallback={<LoadingWrapper isLoading={true} />}>
-        <AIOnboarding onComplete={handleOnboardingComplete} />
-      </Suspense>
+      <LoadingWrapper isLoading={loading} onRetry={handleRetry} timeout={5000}>
+        <Suspense fallback={<div>Loading onboarding...</div>}>
+          <AIOnboarding onComplete={handleOnboardingComplete} />
+        </Suspense>
+      </LoadingWrapper>
     );
   }
 

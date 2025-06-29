@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { questTemplates, getQuestsForRoles, QuestTemplate } from '../utils/questTemplates';
 import { useAuth } from './AuthContext';
@@ -263,7 +264,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     
     try {
       // Try cache first
-      const cachedData = cacheService.get('gameData');
+      const cachedData = cacheService.get<any>('gameData');
       if (cachedData) {
         console.log('Using cached game data');
         if (cachedData.character) setCharacter(cachedData.character);
@@ -722,6 +723,44 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setCurrentQuestSession(null);
     }
   };
+
+  // Optimized auto-sync with debouncing and caching
+  useEffect(() => {
+    if (user && isSyncEnabled && !isInitialLoading) {
+      // Cache locally immediately
+      cacheService.set('character', character);
+      cacheService.set('habits', habits);
+      cacheService.set('achievements', achievements);
+      if (userRoles) cacheService.set('userRoles', userRoles);
+      cacheService.set('dailyActivities', dailyActivities);
+      
+      // Debounced sync to Firebase
+      debouncedSync({ character, habits, achievements, userRoles, dailyActivities });
+    }
+  }, [character, habits, achievements, userRoles, dailyActivities, user, isSyncEnabled, isInitialLoading, debouncedSync]);
+
+  // Save to localStorage whenever state changes
+  useEffect(() => {
+    localStorage.setItem('character', JSON.stringify(character));
+  }, [character]);
+
+  useEffect(() => {
+    if (userRoles) {
+      localStorage.setItem('userRoles', JSON.stringify(userRoles));
+    }
+  }, [userRoles]);
+
+  useEffect(() => {
+    localStorage.setItem('habits', JSON.stringify(habits));
+  }, [habits]);
+
+  useEffect(() => {
+    localStorage.setItem('achievements', JSON.stringify(achievements));
+  }, [achievements]);
+
+  useEffect(() => {
+    localStorage.setItem('dailyActivities', JSON.stringify(dailyActivities));
+  }, [dailyActivities]);
 
   return (
     <GameContext.Provider value={{
