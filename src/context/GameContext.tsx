@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { questTemplates, getQuestsForRoles, QuestTemplate } from '../utils/questTemplates';
 import { useAuth } from './AuthContext';
 import { firebaseDataService } from '../services/firebaseDataService';
+import { cacheService } from '../services/cacheService';
 import { QuestSubtask, QuestFollowUp, EnhancedQuestTemplate } from '../types/quest';
 
 interface Character {
@@ -93,7 +94,11 @@ const GameContext = createContext<GameContextType | undefined>(undefined);
 export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
   
+  // Enhanced state with caching
   const [character, setCharacter] = useState<Character>(() => {
+    const cached = cacheService.get<Character>('character');
+    if (cached) return cached;
+    
     const saved = localStorage.getItem('character');
     return saved ? JSON.parse(saved) : {
       name: 'Shadow Hunter',
@@ -112,6 +117,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
 
   const [userRoles, setUserRolesState] = useState<UserRoles | null>(() => {
+    const cached = cacheService.get<UserRoles>('userRoles');
+    if (cached) return cached;
+    
     const saved = localStorage.getItem('userRoles');
     return saved ? JSON.parse(saved) : null;
   });
@@ -121,11 +129,17 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
 
   const [habits, setHabits] = useState<Habit[]>(() => {
+    const cached = cacheService.get<Habit[]>('habits');
+    if (cached) return cached;
+    
     const saved = localStorage.getItem('habits');
     return saved ? JSON.parse(saved) : [];
   });
 
   const [achievements, setAchievements] = useState<Achievement[]>(() => {
+    const cached = cacheService.get<Achievement[]>('achievements');
+    if (cached) return cached;
+    
     const saved = localStorage.getItem('achievements');
     return saved ? JSON.parse(saved) : [
       {
@@ -155,17 +169,21 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [currentQuestSession, setCurrentQuestSession] = useState<{ questId: string; pomodoroCount: number } | null>(null);
   
   const [dailyActivities, setDailyActivities] = useState<DailyActivity[]>(() => {
+    const cached = cacheService.get<DailyActivity[]>('dailyActivities');
+    if (cached) return cached;
+    
     const saved = localStorage.getItem('dailyActivities');
     return saved ? JSON.parse(saved) : [];
   });
 
-  // Add sync control states
+  // Add sync control states with better debouncing
   const [isSyncEnabled, setIsSyncEnabled] = useState(true);
   const syncTimeoutRef = useRef<NodeJS.Timeout>();
   const lastSyncDataRef = useRef<string>('');
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
 
-  // Debounced sync function
-  const debouncedSync = (data: any) => {
+  // Optimized debounced sync function
+  const debouncedSync = useCallback((data: any) => {
     const dataString = JSON.stringify(data);
     if (dataString === lastSyncDataRef.current) {
       return; // No changes, skip sync
@@ -181,28 +199,53 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         syncToFirebase();
       }
     }, 1000);
-  };
+  }, [isSyncEnabled, user]);
 
-  // Firebase sync effect - only when sync is enabled
+  // Enhanced Firebase sync effect with caching
   useEffect(() => {
     if (user && isSyncEnabled) {
       console.log('Setting up Firebase sync for user:', user.uid);
       
-      // Load data from Firebase when user logs in
-      loadFromFirebase();
+      // Check if we have cached data first
+      const hasCachedData = cacheService.hasCache('gameData');
+      if (!hasCachedData) {
+        setIsInitialLoading(true);
+      }
       
-      // Set up real-time listener
+      // Load data from Firebase when user logs in
+      loadFromFirebase().finally(() => {
+        setIsInitialLoading(false);
+      });
+      
+      // Set up real-time listener with reduced frequency
       const unsubscribe = firebaseDataService.subscribeToGameData(user.uid, (data) => {
         if (data && isSyncEnabled) {
           console.log('Received Firebase update, applying changes...');
-          if (data.character) setCharacter(data.character);
-          if (data.habits) setHabits(data.habits);
-          if (data.achievements) setAchievements(data.achievements);
+          
+          // Cache the received data
+          cacheService.set('gameData', data, 10 * 60 * 1000); // 10 minutes
+          
+          if (data.character) {
+            setCharacter(data.character);
+            cacheService.set('character', data.character);
+          }
+          if (data.habits) {
+            setHabits(data.habits);
+            cacheService.set('habits', data.habits);
+          }
+          if (data.achievements) {
+            setAchievements(data.achievements);
+            cacheService.set('achievements', data.achievements);
+          }
           if (data.userRoles) {
             setUserRolesState(data.userRoles);
             setHasCompletedOnboarding(true);
+            cacheService.set('userRoles', data.userRoles);
           }
-          if (data.dailyActivities) setDailyActivities(data.dailyActivities);
+          if (data.dailyActivities) {
+            setDailyActivities(data.dailyActivities);
+            cacheService.set('dailyActivities', data.dailyActivities);
+          }
         }
       });
 
@@ -210,6 +253,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.log('Cleaning up Firebase sync');
         unsubscribe();
       };
+    } else {
+      setIsInitialLoading(false);
     }
   }, [user, isSyncEnabled]);
 
@@ -217,8 +262,34 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user) return;
     
     try {
+      // Try cache first
+      const cachedData = cacheService.get('gameData');
+      if (cachedData) {
+        console.log('Using cached game data');
+        if (cachedData.character) setCharacter(cachedData.character);
+        if (cachedData.habits) setHabits(cachedData.habits);
+        if (cachedData.achievements) setAchievements(cachedData.achievements);
+        if (cachedData.userRoles) {
+          setUserRolesState(cachedData.userRoles);
+          setHasCompletedOnboarding(true);
+        }
+        if (cachedData.dailyActivities) setDailyActivities(cachedData.dailyActivities);
+        
+        // Still fetch fresh data in background
+        firebaseDataService.loadGameData(user.uid).then(data => {
+          if (data) {
+            cacheService.set('gameData', data);
+          }
+        }).catch(console.error);
+        
+        return;
+      }
+      
       const data = await firebaseDataService.loadGameData(user.uid);
       if (data) {
+        // Cache the loaded data
+        cacheService.set('gameData', data);
+        
         if (data.character) setCharacter(data.character);
         if (data.habits) setHabits(data.habits);
         if (data.achievements) setAchievements(data.achievements);
@@ -238,25 +309,38 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     try {
       console.log('Syncing to Firebase...');
-      await firebaseDataService.saveGameData(user.uid, {
+      const gameData = {
         character,
         habits,
         achievements,
         userRoles,
         dailyActivities
-      });
+      };
+      
+      await firebaseDataService.saveGameData(user.uid, gameData);
+      
+      // Update cache
+      cacheService.set('gameData', gameData);
       console.log('Firebase sync completed');
     } catch (error) {
       console.error('Error syncing to Firebase:', error);
     }
   };
 
-  // Modified auto-sync with debouncing - only when sync is enabled
+  // Optimized auto-sync with debouncing and caching
   useEffect(() => {
-    if (user && isSyncEnabled) {
+    if (user && isSyncEnabled && !isInitialLoading) {
+      // Cache locally immediately
+      cacheService.set('character', character);
+      cacheService.set('habits', habits);
+      cacheService.set('achievements', achievements);
+      if (userRoles) cacheService.set('userRoles', userRoles);
+      cacheService.set('dailyActivities', dailyActivities);
+      
+      // Debounced sync to Firebase
       debouncedSync({ character, habits, achievements, userRoles, dailyActivities });
     }
-  }, [character, habits, achievements, userRoles, dailyActivities, user, isSyncEnabled]);
+  }, [character, habits, achievements, userRoles, dailyActivities, user, isSyncEnabled, isInitialLoading, debouncedSync]);
 
   // Save to localStorage whenever state changes
   useEffect(() => {

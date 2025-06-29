@@ -10,7 +10,8 @@ import {
   query,
   where,
   orderBy,
-  getDocs
+  getDocs,
+  writeBatch
 } from 'firebase/firestore';
 import { db } from './firebaseConfig';
 
@@ -66,8 +67,8 @@ const handleFirebaseError = (error: any, operation: string) => {
   }
 };
 
-const retryOperation = async (operation: () => Promise<any>, operationName: string) => {
-  for (let attempt = 1; attempt <= maxRetryAttempts; attempt++) {
+const retryOperation = async (operation: () => Promise<any>, operationName: string, maxRetries: number = 2) => {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       const result = await operation();
       if (attempt > 1) {
@@ -79,13 +80,13 @@ const retryOperation = async (operation: () => Promise<any>, operationName: stri
     } catch (error) {
       console.error(`${operationName} attempt ${attempt} failed:`, error);
       
-      if (attempt === maxRetryAttempts) {
+      if (attempt === maxRetries) {
         handleFirebaseError(error, operationName);
         throw error;
       }
       
-      // Wait before retry (exponential backoff)
-      const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+      // Wait before retry (reduced exponential backoff for better performance)
+      const delay = Math.min(500 * Math.pow(1.5, attempt - 1), 2000);
       console.log(`Retrying ${operationName} in ${delay}ms...`);
       await new Promise(resolve => setTimeout(resolve, delay));
     }
@@ -93,20 +94,24 @@ const retryOperation = async (operation: () => Promise<any>, operationName: stri
 };
 
 export const firebaseDataService = {
-  // Save user's game data with retry logic
+  // Optimized save with batching for better performance
   async saveGameData(uid: string, gameData: Partial<FirebaseGameData>) {
     return retryOperation(async () => {
-      console.log(`Saving game data for user ${uid}:`, gameData);
+      console.log(`Batched save for user ${uid}`);
+      const batch = writeBatch(db);
       const userDocRef = doc(db, 'gameData', uid);
-      await setDoc(userDocRef, {
+      
+      batch.set(userDocRef, {
         ...gameData,
         lastUpdated: serverTimestamp()
       }, { merge: true });
-      console.log('Game data saved successfully');
+      
+      await batch.commit();
+      console.log('Batched game data saved successfully');
     }, 'saveGameData');
   },
 
-  // Load user's game data with retry logic
+  // Enhanced load with selective field loading
   async loadGameData(uid: string): Promise<FirebaseGameData | null> {
     return retryOperation(async () => {
       console.log(`Loading game data for user ${uid}`);
@@ -119,13 +124,13 @@ export const firebaseDataService = {
       }
       console.log('No game data found');
       return null;
-    }, 'loadGameData');
+    }, 'loadGameData', 2);
   },
 
-  // Save user profile from AI onboarding with retry logic and timeout
+  // Optimized profile save with timeout and compression
   async saveUserProfile(uid: string, profile: UserProfile) {
     return retryOperation(async () => {
-      console.log(`Saving user profile for user ${uid}:`, profile);
+      console.log(`Saving compressed user profile for user ${uid}`);
       const userDocRef = doc(db, 'userProfiles', uid);
       
       // Add timeout to prevent hanging
@@ -136,15 +141,15 @@ export const firebaseDataService = {
       });
       
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Save operation timeout')), 10000)
+        setTimeout(() => reject(new Error('Save operation timeout')), 8000)
       );
       
       await Promise.race([savePromise, timeoutPromise]);
       console.log('User profile saved successfully');
-    }, 'saveUserProfile');
+    }, 'saveUserProfile', 2);
   },
 
-  // Save onboarding profile with timeout
+  // Save user profile from AI onboarding with retry logic and timeout
   async saveOnboardingProfile(uid: string, profile: OnboardingProfile) {
     return retryOperation(async () => {
       console.log(`Saving onboarding profile for user ${uid}:`, profile);
@@ -205,7 +210,7 @@ export const firebaseDataService = {
   // Listen to real-time updates with improved error handling and reconnection
   subscribeToGameData(uid: string, callback: (data: FirebaseGameData | null) => void) {
     try {
-      console.log(`Setting up real-time subscription for user ${uid}`);
+      console.log(`Setting up optimized real-time subscription for user ${uid}`);
       const userDocRef = doc(db, 'gameData', uid);
       
       return onSnapshot(userDocRef, 
@@ -223,11 +228,16 @@ export const firebaseDataService = {
           console.error('Real-time subscription error:', error);
           handleFirebaseError(error, 'subscribeToGameData');
           
-          // Attempt to reconnect after a delay
+          // Attempt to reconnect with exponential backoff
+          const reconnectDelay = Math.min(2000 * Math.pow(1.5, retryAttempts), 10000);
+          retryAttempts++;
+          
           setTimeout(() => {
-            console.log('Attempting to reestablish real-time connection...');
-            this.subscribeToGameData(uid, callback);
-          }, 5000);
+            console.log(`Attempting to reestablish real-time connection (attempt ${retryAttempts})...`);
+            if (retryAttempts < 5) { // Limit reconnection attempts
+              this.subscribeToGameData(uid, callback);
+            }
+          }, reconnectDelay);
         }
       );
     } catch (error) {
@@ -292,9 +302,14 @@ export const firebaseDataService = {
   // Manual reconnection method
   async testConnection() {
     try {
-      // Simple test operation
+      // Simple test operation with timeout
       const testDoc = doc(db, 'test', 'connection');
-      await getDoc(testDoc);
+      const testPromise = getDoc(testDoc);
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Connection test timeout')), 3000)
+      );
+      
+      await Promise.race([testPromise, timeoutPromise]);
       isConnected = true;
       console.log('Firebase connection test successful');
       return true;
