@@ -1,7 +1,8 @@
+
 import React, { useState, useEffect } from 'react';
 import { useGame } from '../context/GameContext';
-import { useAuth } from '../context/AuthContext';
-import { firebaseDataService } from '../services/firebaseDataService';
+import { useAuth } from '../context/SupabaseAuthContext';
+import { supabaseDataService } from '../services/supabaseDataService';
 
 interface CalendarHeatmapProps {
   onDateClick?: (date: string) => void;
@@ -10,25 +11,25 @@ interface CalendarHeatmapProps {
 const CalendarHeatmap = ({ onDateClick }: CalendarHeatmapProps) => {
   const { habits, getDailyActivity, getStreakCount } = useGame();
   const { user } = useAuth();
-  const [firebaseActivities, setFirebaseActivities] = useState<any[]>([]);
+  const [supabaseActivities, setSupabaseActivities] = useState<any[]>([]);
   
   useEffect(() => {
     if (user) {
-      loadFirebaseActivities();
+      loadSupabaseActivities();
     }
   }, [user]);
 
-  const loadFirebaseActivities = async () => {
+  const loadSupabaseActivities = async () => {
     if (!user) return;
     
     const endDate = new Date().toISOString().split('T')[0];
     const startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     
     try {
-      const activities = await firebaseDataService.getStreakData(user.uid, startDate, endDate);
-      setFirebaseActivities(activities);
+      const activities = await supabaseDataService.getStreakData(startDate, endDate);
+      setSupabaseActivities(activities);
     } catch (error) {
-      console.error('Error loading Firebase activities:', error);
+      console.error('Error loading Supabase activities:', error);
     }
   };
   
@@ -49,11 +50,11 @@ const CalendarHeatmap = ({ onDateClick }: CalendarHeatmapProps) => {
 
   const getActivityLevel = (date: string) => {
     const activity = getDailyActivity(date);
-    const firebaseActivity = firebaseActivities.find(a => a.date === date);
+    const supabaseActivity = supabaseActivities.find(a => a.date === date);
     
-    const totalQuests = activity.questsCompleted + (firebaseActivity?.questsCompleted || 0);
+    const totalQuests = activity.questsCompleted + (supabaseActivity?.quests_completed || 0);
     
-    if (!activity.hasLogin && !firebaseActivity?.hasLogin) return 0;
+    if (!activity.hasLogin && !supabaseActivity?.has_login) return 0;
     if (totalQuests === 0) return 1;
     if (totalQuests <= 2) return 2;
     if (totalQuests <= 3) return 3;
@@ -96,15 +97,15 @@ const CalendarHeatmap = ({ onDateClick }: CalendarHeatmapProps) => {
         {dates.map(date => {
           const level = getActivityLevel(date);
           const activity = getDailyActivity(date);
-          const firebaseActivity = firebaseActivities.find(a => a.date === date);
-          const totalQuests = activity.questsCompleted + (firebaseActivity?.questsCompleted || 0);
+          const supabaseActivity = supabaseActivities.find(a => a.date === date);
+          const totalQuests = activity.questsCompleted + (supabaseActivity?.quests_completed || 0);
           
           return (
             <div
               key={date}
               className={`aspect-square rounded border cursor-pointer transition-all duration-200 hover:scale-110 ${getActivityColor(level)}`}
               onClick={() => onDateClick?.(date)}
-              title={`${formatDate(date)}: ${totalQuests} quests${activity.hasLogin || firebaseActivity?.hasLogin ? ', logged in' : ''}`}
+              title={`${formatDate(date)}: ${totalQuests} quests${activity.hasLogin || supabaseActivity?.has_login ? ', logged in' : ''}`}
             >
               {level === 4 && (
                 <div className="w-full h-full flex items-center justify-center text-xs">
