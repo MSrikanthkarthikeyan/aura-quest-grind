@@ -27,6 +27,8 @@ const QuestPomodoroLauncher = ({ quest, onClose, onConfirm }: QuestPomodoroLaunc
   const [isGeneratingSubtasks, setIsGeneratingSubtasks] = useState(false);
   const [subtasksGenerated, setSubtasksGenerated] = useState(false);
 
+  const currentQuest = questId ? habits.find(h => h.id === questId) : null;
+
   // Load existing subtasks or generate new ones
   useEffect(() => {
     const loadOrGenerateSubtasks = async () => {
@@ -60,15 +62,29 @@ Format as JSON array:
   }
 ]`;
 
-        const aiResponse = await generateAIQuests(subtaskPrompt);
+        // Create a proper AIQuestRequest object
+        const aiRequest = {
+          roles: [quest.category],
+          goals: [quest.title],
+          skillLevel: 'Intermediate' as const,
+          timeCommitment: quest.duration || '30 minutes'
+        };
+
+        const aiResponse = await generateAIQuests(aiRequest);
         console.log('AI Subtasks Response:', aiResponse);
         
-        // Parse the AI response
+        // Parse the AI response - use the response directly since it's already an array
         let generatedSubtasks: any[] = [];
         try {
-          const jsonMatch = aiResponse.quests.match(/\[[\s\S]*\]/);
-          if (jsonMatch) {
-            generatedSubtasks = JSON.parse(jsonMatch[0]);
+          // If we have AI response with subtasks, use them
+          if (aiResponse && aiResponse.length > 0 && aiResponse[0].subtasks) {
+            generatedSubtasks = aiResponse[0].subtasks;
+          } else {
+            // Try to parse from a string response if needed
+            const jsonMatch = JSON.stringify(aiResponse).match(/\[[\s\S]*\]/);
+            if (jsonMatch) {
+              generatedSubtasks = JSON.parse(jsonMatch[0]);
+            }
           }
         } catch (error) {
           console.error('Error parsing subtasks:', error);

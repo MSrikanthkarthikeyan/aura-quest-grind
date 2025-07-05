@@ -274,8 +274,34 @@ Format your response as a JSON object with:
 
 Keep the response concise but actionable. Focus on practical advice they can implement immediately.`;
 
-    const result = await model.generateContent(prompt);
-    const responseText = result.response.text();
+    const requestBody = createSerializableRequest({
+      contents: [{
+        parts: [{
+          text: prompt
+        }]
+      }],
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 1024,
+      }
+    });
+
+    const response = await retryApiCall(() => 
+      fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      })
+    );
+
+    if (!response.ok) {
+      throw new Error(`Gemini API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text;
     
     console.log('Raw AI response:', responseText);
     

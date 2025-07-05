@@ -2,7 +2,7 @@
 export interface QuestSubtask {
   id: string;
   title: string;
-  description: string;
+  description?: string; // Make this optional to match database service
   estimatedPomodoros: number;
   isCompleted: boolean;
   resources?: string[];
