@@ -230,9 +230,9 @@ const QuestBoard = () => {
 
       {/* Quests Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredHabits.map(habit => (
+        {filteredHabits.map((habit, index) => (
           <div 
-            key={habit.id} 
+            key={`habit-${habit.id}-${index}`} 
             className={`relative overflow-hidden rounded-2xl border backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:shadow-xl ${
               habit.completed 
                 ? 'bg-gradient-to-br from-green-900/40 to-emerald-900/40 border-green-500/30 hover:shadow-green-500/25' 

@@ -47,6 +47,32 @@ User Question: ${request.userQuery}`;
   }
 };
 
+// Helper functions to get context
+const getQuestContext = async (questId: string) => {
+  try {
+    // This is a simplified approach - in practice, you'd fetch from your habits/quests store
+    // For now, we'll return a basic structure that can be expanded
+    return {
+      title: 'Current Quest',
+      description: 'Working on improving skills and productivity'
+    };
+  } catch (error) {
+    console.error('Error getting quest context:', error);
+    return null;
+  }
+};
+
+const getSubtaskContext = async (subtaskId: string) => {
+  try {
+    // This would typically fetch from Supabase or local state
+    const subtask = await supabaseDataService.getQuestSubtasks('dummy'); // We'll get specific subtask
+    return subtask.find(s => s.id === subtaskId) || null;
+  } catch (error) {
+    console.error('Error getting subtask context:', error);
+    return null;
+  }
+};
+
 export const questFollowUpService = {
   async submitFollowUpQuery(request: FollowUpRequest): Promise<FollowUpResponse> {
     try {
@@ -61,8 +87,18 @@ export const questFollowUpService = {
 
       const followUpId = followUpData[0].id;
 
-      // Generate AI response
-      const aiResponse = await generateQuestFollowUp(request.query);
+      // Get quest and subtask context for better AI responses
+      const quest = await getQuestContext(request.questId);
+      const subtask = request.subtaskId ? await getSubtaskContext(request.subtaskId) : null;
+      
+      // Generate AI response with full context
+      const aiResponse = await generateQuestFollowUp(
+        request.query,
+        quest?.title,
+        quest?.description,
+        subtask?.title,
+        subtask?.description
+      );
       
       // Update the follow-up with the response
       await supabaseDataService.updateFollowUpResponse(

@@ -254,17 +254,42 @@ export const generateOnboardingResponse = async (
   }
 };
 
-export const generateQuestFollowUp = async (query: string): Promise<QuestFollowUpResponse> => {
+export const generateQuestFollowUp = async (
+  query: string, 
+  questTitle?: string, 
+  questDescription?: string, 
+  subtaskTitle?: string, 
+  subtaskDescription?: string
+): Promise<QuestFollowUpResponse> => {
   try {
-    console.log('🤖 Generating AI follow-up response for query:', query);
+    console.log('🤖 Generating AI follow-up response with context for query:', query);
 
-    const prompt = `You are a helpful AI assistant specializing in productivity and skill development. A user is working on a quest/habit and needs assistance.
+    // Create contextual prompt with quest/subtask information
+    let contextPrompt = `You are a helpful AI assistant specializing in productivity and skill development.`;
+    
+    if (questTitle) {
+      contextPrompt += ` The user is working on a quest called "${questTitle}"`;
+      if (questDescription) {
+        contextPrompt += ` (${questDescription})`;
+      }
+      contextPrompt += '.';
+    }
+    
+    if (subtaskTitle) {
+      contextPrompt += ` They are currently focused on the subtask: "${subtaskTitle}"`;
+      if (subtaskDescription) {
+        contextPrompt += ` - ${subtaskDescription}`;
+      }
+      contextPrompt += '.';
+    }
+
+    const prompt = `${contextPrompt}
 
 User Query: "${query}"
 
 Please provide:
-1. A helpful, actionable response that directly addresses their question
-2. Suggest 2-3 relevant resources (websites, tools, or articles) that could help them
+1. A helpful, actionable response that directly addresses their question in the context of their quest/subtask
+2. Suggest 2-3 relevant resources (websites, tools, or articles) that could help them with this specific quest/subtask
 
 Format your response as a JSON object with:
 {
@@ -272,7 +297,7 @@ Format your response as a JSON object with:
   "resources": ["Resource 1", "Resource 2", "Resource 3"]
 }
 
-Keep the response concise but actionable. Focus on practical advice they can implement immediately.`;
+Keep the response concise but actionable. Focus on practical advice they can implement immediately for their current quest/subtask.`;
 
     const requestBody = createSerializableRequest({
       contents: [{
@@ -387,7 +412,13 @@ Please provide your response in the following JSON format:
   {
     "title": "Quest title (gamified, RPG-themed like 'Shadow Script Practice' or 'Algorithm Abyss')",
     "duration": "Realistic time estimate (e.g., '30 minutes', '2 hours')",
-    "subtasks": ["actionable step 1", "actionable step 2", "actionable step 3"],
+    "subtasks": [
+      {
+        "title": "Subtask title",
+        "description": "Brief description of what to do",
+        "estimatedPomodoros": 1-3
+      }
+    ],
     "difficulty": "Easy|Moderate|Hard",
     "frequency": "Daily|Weekly|Once|Custom",
     "category": "Tech|Academics|Business|Content|Fitness|Personal",
@@ -397,7 +428,7 @@ Please provide your response in the following JSON format:
 
 Requirements:
 - Use engaging, RPG-themed quest titles
-- Keep subtasks actionable and motivational
+- Create 2-4 actionable subtasks per quest with proper titles and descriptions
 - Match difficulty to user's skill level
 - Ensure time estimates are realistic
 - Categories should match: Tech, Academics, Business, Content, Fitness, Personal

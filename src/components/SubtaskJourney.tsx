@@ -54,6 +54,9 @@ const SubtaskJourney: React.FC<SubtaskJourneyProps> = ({
 
     setIsSubmitting(true);
     try {
+      // Get the current quest for context
+      const currentQuest = { title: 'Current Quest', description: 'Quest description' }; // This should come from props or context
+      
       const response = await questFollowUpService.submitFollowUpQuery({
         questId,
         subtaskId: currentSubtask?.id,

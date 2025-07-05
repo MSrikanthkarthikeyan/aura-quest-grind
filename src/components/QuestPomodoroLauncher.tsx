@@ -60,51 +60,15 @@ Format as JSON array:
   }
 ]`;
 
-        // Create a proper AIQuestRequest object
-        const aiRequest = {
-          roles: [quest.category],
-          goals: [quest.title],
-          skillLevel: 'Intermediate' as const,
-          timeCommitment: quest.duration || '30 minutes'
-        };
-
-        const aiResponse = await generateAIQuests(aiRequest);
-        console.log('AI Subtasks Response:', aiResponse);
+        // Use the dedicated subtask generation service
+        const { generateQuestSubtasks } = await import('../services/questSubtaskService');
+        const generatedSubtasks = await generateQuestSubtasks(
+          quest.title,
+          quest.category,
+          quest.description
+        );
         
-        // Parse the AI response - use the response directly since it's already an array
-        let generatedSubtasks: any[] = [];
-        try {
-          // If we have AI response with subtasks, use them
-          if (aiResponse && aiResponse.length > 0 && aiResponse[0].subtasks) {
-            generatedSubtasks = aiResponse[0].subtasks;
-          } else {
-            // Try to parse from a string response if needed
-            const jsonMatch = JSON.stringify(aiResponse).match(/\[[\s\S]*\]/);
-            if (jsonMatch) {
-              generatedSubtasks = JSON.parse(jsonMatch[0]);
-            }
-          }
-        } catch (error) {
-          console.error('Error parsing subtasks:', error);
-          // Fallback subtasks
-          generatedSubtasks = [
-            {
-              title: "Plan and prepare",
-              description: "Set up workspace and gather necessary resources",
-              estimatedPomodoros: 1
-            },
-            {
-              title: "Execute main work",
-              description: "Focus on the core activities of this quest",
-              estimatedPomodoros: 2
-            },
-            {
-              title: "Review and complete",
-              description: "Check progress and finalize the quest",
-              estimatedPomodoros: 1
-            }
-          ];
-        }
+        console.log('Generated subtasks:', generatedSubtasks);
 
         // Transform to our subtask format
         const formattedSubtasks = generatedSubtasks.map((subtask, index) => ({
