@@ -21,6 +21,11 @@ export interface AIQuestResponse {
   totalEstimatedPomodoros?: number;
 }
 
+export interface QuestFollowUpResponse {
+  response: string;
+  resources: string[];
+}
+
 interface OnboardingResponse {
   message: string;
   extractedData?: Partial<UserProfile>;
@@ -246,6 +251,53 @@ export const generateOnboardingResponse = async (
   } catch (error) {
     console.error('Onboarding AI Error:', error);
     return getFallbackResponse(userInputCount, currentData, isFinalAnalysis);
+  }
+};
+
+export const generateQuestFollowUp = async (query: string): Promise<QuestFollowUpResponse> => {
+  try {
+    console.log('🤖 Generating AI follow-up response for query:', query);
+
+    const prompt = `You are a helpful AI assistant specializing in productivity and skill development. A user is working on a quest/habit and needs assistance.
+
+User Query: "${query}"
+
+Please provide:
+1. A helpful, actionable response that directly addresses their question
+2. Suggest 2-3 relevant resources (websites, tools, or articles) that could help them
+
+Format your response as a JSON object with:
+{
+  "response": "Your helpful response here...",
+  "resources": ["Resource 1", "Resource 2", "Resource 3"]
+}
+
+Keep the response concise but actionable. Focus on practical advice they can implement immediately.`;
+
+    const result = await model.generateContent(prompt);
+    const responseText = result.response.text();
+    
+    console.log('Raw AI response:', responseText);
+    
+    // Extract JSON from the response
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error('No valid JSON found in AI response');
+    }
+    
+    const parsedResponse = JSON.parse(jsonMatch[0]);
+    
+    console.log('✅ Follow-up response generated successfully');
+    return {
+      response: parsedResponse.response || 'I can help you with that! Could you provide more specific details about what you need assistance with?',
+      resources: parsedResponse.resources || []
+    };
+  } catch (error) {
+    console.error('❌ Error generating follow-up response:', error);
+    return {
+      response: 'I encountered an issue generating a response. Please try rephrasing your question or ask for help with a specific aspect of your quest.',
+      resources: []
+    };
   }
 };
 

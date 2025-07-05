@@ -122,6 +122,7 @@ export type Database = {
           created_at: string
           id: string
           quests: Json
+          status: string | null
           updated_at: string
           user_id: string
         }
@@ -129,6 +130,7 @@ export type Database = {
           created_at?: string
           id?: string
           quests: Json
+          status?: string | null
           updated_at?: string
           user_id: string
         }
@@ -136,6 +138,7 @@ export type Database = {
           created_at?: string
           id?: string
           quests?: Json
+          status?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -239,6 +242,47 @@ export type Database = {
         }
         Relationships: []
       }
+      quest_follow_ups: {
+        Row: {
+          created_at: string
+          id: string
+          query: string
+          quest_id: string
+          resources: string[] | null
+          response: string | null
+          subtask_id: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          query: string
+          quest_id: string
+          resources?: string[] | null
+          response?: string | null
+          subtask_id?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          query?: string
+          quest_id?: string
+          resources?: string[] | null
+          response?: string | null
+          subtask_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quest_follow_ups_subtask_id_fkey"
+            columns: ["subtask_id"]
+            isOneToOne: false
+            referencedRelation: "quest_subtasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       quest_sessions: {
         Row: {
           created_at: string
@@ -262,6 +306,48 @@ export type Database = {
           pomodoro_count?: number
           quest_id?: string
           started_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      quest_subtasks: {
+        Row: {
+          created_at: string
+          description: string | null
+          estimated_pomodoros: number | null
+          estimated_time: number | null
+          id: string
+          is_completed: boolean | null
+          order_index: number | null
+          quest_id: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          estimated_pomodoros?: number | null
+          estimated_time?: number | null
+          id?: string
+          is_completed?: boolean | null
+          order_index?: number | null
+          quest_id: string
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          estimated_pomodoros?: number | null
+          estimated_time?: number | null
+          id?: string
+          is_completed?: boolean | null
+          order_index?: number | null
+          quest_id?: string
+          title?: string
+          updated_at?: string
           user_id?: string
         }
         Relationships: []

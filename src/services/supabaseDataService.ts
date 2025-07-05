@@ -1,4 +1,3 @@
-
 import { supabase } from '../integrations/supabase/client';
 
 interface GameData {
@@ -26,6 +25,26 @@ interface OnboardingProfile {
   dailyCommitment: string;
   preferredStyle: string;
   skillLevel?: string;
+}
+
+interface QuestSubtask {
+  id: string;
+  questId: string;
+  title: string;
+  description?: string;
+  estimatedTime: number;
+  estimatedPomodoros: number;
+  isCompleted: boolean;
+  orderIndex: number;
+}
+
+interface QuestFollowUp {
+  id: string;
+  questId: string;
+  subtaskId?: string;
+  query: string;
+  response?: string;
+  resources?: string[];
 }
 
 export const supabaseDataService = {
@@ -301,5 +320,210 @@ export const supabaseDataService = {
       console.error('Error getting streak data:', error);
       throw error;
     }
+  },
+
+  // Subtask management
+  async saveQuestSubtasks(questId: string, subtasks: Omit<QuestSubtask, 'id'>[]) {
+    try {
+      console.log('Saving quest subtasks to Supabase');
+      const user = await supabase.auth.getUser();
+      
+      const subtasksToInsert = subtasks.map(subtask => ({
+        quest_id: questId,
+        user_id: user.data.user?.id,
+        title: subtask.title,
+        description: subtask.description,
+        estimated_time: subtask.estimatedTime,
+        estimated_pomodoros: subtask.estimatedPomodoros,
+        is_completed: subtask.isCompleted,
+        order_index: subtask.orderIndex
+      }));
+
+      const { data, error } = await supabase
+        .from('quest_subtasks')
+        .upsert(subtasksToInsert)
+        .select();
+
+      if (error) throw error;
+      console.log('Quest subtasks saved successfully');
+      return data;
+    } catch (error) {
+      console.error('Error saving quest subtasks:', error);
+      throw error;
+    }
+  },
+
+  async getQuestSubtasks(questId: string): Promise<QuestSubtask[]> {
+    try {
+      console.log('Getting quest subtasks from Supabase');
+      const { data, error } = await supabase
+        .from('quest_subtasks')
+        .select('*')
+        .eq('quest_id', questId)
+        .order('order_index', { ascending: true });
+
+      if (error) throw error;
+      
+      return (data || []).map(item => ({
+        id: item.id,
+        questId: item.quest_id,
+        title: item.title,
+        description: item.description,
+        estimatedTime: item.estimated_time,
+        estimatedPomodoros: item.estimated_pomodoros,
+        isCompleted: item.is_completed,
+        orderIndex: item.order_index
+      }));
+    } catch (error) {
+      console.error('Error getting quest subtasks:', error);
+      throw error;
+    }
+  },
+
+  async updateSubtaskCompletion(subtaskId: string, isCompleted: boolean) {
+    try {
+      console.log('Updating subtask completion status');
+      const { data, error } = await supabase
+        .from('quest_subtasks')
+        .update({ is_completed: isCompleted, updated_at: new Date().toISOString() })
+        .eq('id', subtaskId)
+        .select();
+
+      if (error) throw error;
+      console.log('Subtask completion updated successfully');
+      return data;
+    } catch (error) {
+      console.error('Error updating subtask completion:', error);
+      throw error;
+    }
+  },
+
+  // Follow-up management
+  async saveQuestFollowUp(followUp: Omit<QuestFollowUp, 'id'>) {
+    try {
+      console.log('Saving quest follow-up to Supabase');
+      const user = await supabase.auth.getUser();
+      
+      const { data, error } = await supabase
+        .from('quest_follow_ups')
+        .insert({
+          quest_id: followUp.questId,
+          subtask_id: followUp.subtaskId,
+          user_id: user.data.user?.id,
+          query: followUp.query,
+          response: followUp.response,
+          resources: followUp.resources
+        })
+        .select();
+
+      if (error) throw error;
+      console.log('Quest follow-up saved successfully');
+      return data;
+    } catch (error) {
+      console.error('Error saving quest follow-up:', error);
+      throw error;
+    }
+  },
+
+  async getQuestFollowUps(questId: string): Promise<QuestFollowUp[]> {
+    try {
+      console.log('Getting quest follow-ups from Supabase');
+      const { data, error } = await supabase
+        .from('quest_follow_ups')
+        .select('*')
+        .eq('quest_id', questId)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+      
+      return (data || []).map(item => ({
+        id: item.id,
+        questId: item.quest_id,
+        subtaskId: item.subtask_id,
+        query: item.query,
+        response: item.response,
+        resources: item.resources
+      }));
+    } catch (error) {
+      console.error('Error getting quest follow-ups:', error);
+      throw error;
+    }
+  },
+
+  async updateFollowUpResponse(followUpId: string, response: string, resources?: string[]) {
+    try {
+      console.log('Updating follow-up response');
+      const { data, error } = await supabase
+        .from('quest_follow_ups')
+        .update({ response, resources })
+        .eq('id', followUpId)
+        .select();
+
+      if (error) throw error;
+      console.log('Follow-up response updated successfully');
+      return data;
+    } catch (error) {
+      console.error('Error updating follow-up response:', error);
+      throw error;
+    }
+  },
+
+  // Enhanced quest management
+  async getGeneratedQuests() {
+    try {
+      console.log('Getting generated quests from Supabase');
+      const { data, error } = await supabase
+        .from('generated_quests')
+        .select('*')
+        .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        if (error.code === 'PGRST116') {
+          console.log('No generated quests found');
+          return null;
+        }
+        throw error;
+      }
+
+      console.log('Generated quests retrieved successfully');
+      return data;
+    } catch (error) {
+      console.error('Error getting generated quests:', error);
+      throw error;
+    }
+  },
+
+  // Real-time subscriptions for subtasks
+  subscribeToSubtasks(questId: string, callback: (subtasks: QuestSubtask[]) => void) {
+    console.log('Setting up real-time subscription for subtasks');
+    
+    const channel = supabase
+      .channel(`subtasks-${questId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'quest_subtasks',
+          filter: `quest_id=eq.${questId}`
+        },
+        async () => {
+          console.log('Subtasks updated, fetching latest data');
+          try {
+            const updatedSubtasks = await this.getQuestSubtasks(questId);
+            callback(updatedSubtasks);
+          } catch (error) {
+            console.error('Error fetching updated subtasks:', error);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      console.log('Cleaning up subtasks subscription');
+      supabase.removeChannel(channel);
+    };
   }
 };
