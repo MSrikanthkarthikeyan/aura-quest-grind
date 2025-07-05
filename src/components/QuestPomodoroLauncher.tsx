@@ -27,8 +27,6 @@ const QuestPomodoroLauncher = ({ quest, onClose, onConfirm }: QuestPomodoroLaunc
   const [isGeneratingSubtasks, setIsGeneratingSubtasks] = useState(false);
   const [subtasksGenerated, setSubtasksGenerated] = useState(false);
 
-  const currentQuest = questId ? habits.find(h => h.id === questId) : null;
-
   // Load existing subtasks or generate new ones
   useEffect(() => {
     const loadOrGenerateSubtasks = async () => {
