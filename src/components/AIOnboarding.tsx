@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/SupabaseAuthContext';
 import { useGame } from '../context/GameContext';
-import { firebaseDataService } from '../services/firebaseDataService';
+import { supabaseDataService } from '../services/supabaseDataService';
 import { generateOnboardingResponse, generateAIQuests, AIQuestResponse } from '../services/geminiService';
 import { Send, Sparkles, Bot, User as UserIcon, CheckCircle, Loader2, AlertCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -213,7 +213,7 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
 
     // Step 2: Create onboarding profile with fallbacks
     const onboardingProfile = {
-      name: user?.displayName || 'Hunter',
+      name: user?.user_metadata?.display_name || 'Hunter',
       interests: collectedData.focusAreas || ['Personal Development'],
       goal: collectedData.mainGoal || 'Level up skills and build better habits',
       dailyCommitment: collectedData.dailyCommitment || '1-2 hours',
@@ -227,10 +227,10 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
     updateProgress('Saving your profile...');
     try {
       await Promise.race([
-        firebaseDataService.saveOnboardingProfile(user.uid, onboardingProfile),
+        supabaseDataService.saveOnboardingProfile(onboardingProfile),
         new Promise((_, reject) => setTimeout(() => reject(new Error('Profile save timeout')), 10000))
       ]);
-      console.log('✅ Saved onboarding profile to Firebase');
+      console.log('✅ Saved onboarding profile to Supabase');
     } catch (error) {
       console.warn('⚠️ Profile save failed, continuing:', error);
     }
@@ -275,14 +275,14 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
     
     console.log('✅ Generated', generatedQuests.length, 'quests');
     
-    // Step 5: Save quests to Firebase (non-blocking)
+    // Step 5: Save quests to Supabase (non-blocking)
     updateProgress('Saving your quests...');
     try {
       await Promise.race([
-        firebaseDataService.saveGeneratedQuests(user.uid, generatedQuests),
+        supabaseDataService.saveGeneratedQuests(generatedQuests),
         new Promise((_, reject) => setTimeout(() => reject(new Error('Quest save timeout')), 8000))
       ]);
-      console.log('✅ Saved quests to Firebase');
+      console.log('✅ Saved quests to Supabase');
     } catch (error) {
       console.warn('⚠️ Quest save failed, continuing:', error);
     }
@@ -393,8 +393,8 @@ const AIOnboarding = ({ onComplete }: AIOnboardingProps) => {
 
     // Save user profile (non-blocking)
     try {
-      await firebaseDataService.saveUserProfile(user.uid, profile);
-      console.log('✅ Saved user profile to Firebase');
+      await supabaseDataService.saveUserProfile(profile);
+      console.log('✅ Saved user profile to Supabase');
     } catch (error) {
       console.warn('⚠️ User profile save failed:', error);
     }
